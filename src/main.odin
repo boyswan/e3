@@ -1,0 +1,9 @@
+package app
+
+import "core:fmt"
+
+
+main :: proc() {
+
+	fmt.println("Hellope!")
+}
