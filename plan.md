@@ -182,6 +182,15 @@ Later features:
 8. Add stacked/tabbed layouts.
 9. Add configuration.
 
+## Current Implementation Notes
+
+- Added initial Odin structs for `App`, `Workspace`, `Node`, and `Pane`.
+- Added workspace initialization with numbered workspaces `1..9`.
+- Added basic active workspace switching.
+- Added basic i3-style split tree creation for horizontal and vertical splits.
+- Added recursive layout calculation for split, stacked, tabbed, and pane nodes.
+- Terminal integration is still stubbed behind `Terminal_Handle`.
+
 ## Open Questions
 
 - Should this run directly in a terminal, or as a graphical window backed by Ghostty's terminal engine?
