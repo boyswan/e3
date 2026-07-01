@@ -564,6 +564,45 @@ repair_container_focus_and_weights :: proc(node: ^Node) {
 	}
 }
 
+toggle_split_kind :: proc(kind: Node_Kind) -> Node_Kind {
+	if kind == .Split_Horizontal {
+		return .Split_Vertical
+	}
+	return .Split_Horizontal
+}
+
+layout_toggle_split :: proc(app: ^App) -> bool {
+	workspace := active_workspace(app)
+	if workspace == nil {
+		return false
+	}
+	if workspace.root == nil {
+		workspace.default_split_kind = toggle_split_kind(workspace.default_split_kind)
+		return true
+	}
+
+	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+	if focused == nil || focused.kind != .Pane || focused.pane == nil {
+		return false
+	}
+
+	parent := focused.parent
+	if parent == nil {
+		focused.pane.split_kind = toggle_split_kind(focused.pane.split_kind)
+		focused.pane.split_active = true
+		workspace.default_split_kind = focused.pane.split_kind
+		return true
+	}
+
+	if is_split_kind(parent.kind) {
+		parent.kind = toggle_split_kind(parent.kind)
+		focused.pane.split_kind = parent.kind
+		return focus_node(workspace, focused)
+	}
+
+	return false
+}
+
 move_pane_direction :: proc(app: ^App, direction: Direction) -> bool {
 	workspace := active_workspace(app)
 	if workspace == nil || workspace.root == nil {

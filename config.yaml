@@ -43,6 +43,7 @@ input:
   close_pane: "w"
   dump_tree: "t"
   resize_mode: "r"
+  layout_toggle_split: "shift+e"
   focus_left: "h"
   focus_down: "j"
   focus_up: "k"

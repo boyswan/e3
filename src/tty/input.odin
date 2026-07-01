@@ -68,6 +68,8 @@ action_from_modified_key :: proc(key: byte) -> input.Action {
 		return input.Action{kind = .Command, command = domain.command_dump_tree()}
 	case 'r':
 		return input.Action{kind = .Enter_Resize_Mode}
+	case 'E':
+		return input.Action{kind = .Command, command = domain.command_layout_toggle_split()}
 	case 'h':
 		return input.Action{kind = .Command, command = domain.command_focus(.Left)}
 	case 'j':
