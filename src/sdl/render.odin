@@ -66,7 +66,7 @@ begin :: proc(state: ^State, config: render.Renderer_Config) -> bool {
 	window: ^sdl3.Window
 	sdl_renderer: ^sdl3.Renderer
 	window_flags := sdl3.WindowFlags{.RESIZABLE}
-	if !sdl3.CreateWindowAndRenderer("odin-play", 1000, 700, window_flags, &window, &sdl_renderer) {
+	if !sdl3.CreateWindowAndRenderer("e3", 1000, 700, window_flags, &window, &sdl_renderer) {
 		sdl3.Quit()
 		state.initialized = false
 		return false

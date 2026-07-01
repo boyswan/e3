@@ -40,23 +40,36 @@ find_config_path :: proc() -> string {
 	if os.exists("config.yaml") {
 		return "config.yaml"
 	}
+	if os.exists("e3.yaml") {
+		return "e3.yaml"
+	}
 	if os.exists("odin-play.yaml") {
 		return "odin-play.yaml"
 	}
 
 	xdg := os.get_env("XDG_CONFIG_HOME", context.temp_allocator)
 	if xdg != "" {
-		path := fmt.aprintf("%s/odin-play/config.yaml", xdg, allocator = context.temp_allocator)
+		path := fmt.aprintf("%s/e3/config.yaml", xdg, allocator = context.temp_allocator)
 		if os.exists(path) {
 			return path
+		}
+
+		legacy_path := fmt.aprintf("%s/odin-play/config.yaml", xdg, allocator = context.temp_allocator)
+		if os.exists(legacy_path) {
+			return legacy_path
 		}
 	}
 
 	home := os.get_env("HOME", context.temp_allocator)
 	if home != "" {
-		path := fmt.aprintf("%s/.config/odin-play/config.yaml", home, allocator = context.temp_allocator)
+		path := fmt.aprintf("%s/.config/e3/config.yaml", home, allocator = context.temp_allocator)
 		if os.exists(path) {
 			return path
+		}
+
+		legacy_path := fmt.aprintf("%s/.config/odin-play/config.yaml", home, allocator = context.temp_allocator)
+		if os.exists(legacy_path) {
+			return legacy_path
 		}
 	}
 

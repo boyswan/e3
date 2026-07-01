@@ -4,13 +4,13 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-DEBUG_TREE_PATH :: "/tmp/odin-play-tree.log"
+DEBUG_TREE_PATH :: "/tmp/e3-tree.log"
 
 dump_tree :: proc(app: ^App) -> bool {
 	builder := strings.builder_make()
 	defer strings.builder_destroy(&builder)
 
-	fmt.sbprintfln(&builder, "odin-play tree dump")
+	fmt.sbprintfln(&builder, "e3 tree dump")
 	fmt.sbprintfln(&builder, "active_workspace_index=%d next_pane_id=%d", app.active_workspace_index, app.next_pane_id)
 	fmt.sbprintfln(&builder, "")
 
