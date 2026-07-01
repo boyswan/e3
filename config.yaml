@@ -42,6 +42,7 @@ input:
   open_pane: "enter"
   close_pane: "w"
   dump_tree: "t"
+  resize_mode: "r"
   focus_left: "h"
   focus_down: "j"
   focus_up: "k"

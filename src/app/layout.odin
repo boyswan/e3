@@ -543,6 +543,77 @@ repair_container_focus_and_weights :: proc(node: ^Node) {
 	}
 }
 
+resize_dimension :: proc(app: ^App, orientation: Node_Kind, step: f32) -> bool {
+	workspace := active_workspace(app)
+	if workspace == nil || workspace.root == nil {
+		return false
+	}
+
+	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+	if focused == nil {
+		return false
+	}
+
+	current := focused
+	for current.parent != nil {
+		parent := current.parent
+		if parent.kind == orientation && len(parent.children) > 1 {
+			index := find_child_index(parent, current)
+			if index < 0 {
+				return false
+			}
+			return resize_child_weight(parent, index, step)
+		}
+		current = parent
+	}
+
+	return false
+}
+
+resize_child_weight :: proc(parent: ^Node, target_index: int, step: f32) -> bool {
+	repair_container_focus_and_weights(parent)
+	child_count := len(parent.children)
+	if child_count <= 1 || target_index < 0 || target_index >= child_count {
+		return false
+	}
+
+	total: f32 = 0
+	for weight in parent.weights {
+		total += weight
+	}
+	if total <= 0 {
+		return false
+	}
+
+	amount := total * step
+	other_delta := -amount / f32(child_count - 1)
+	min_weight := total * 0.05
+
+	new_weights: [16]f32
+	if child_count > len(new_weights) {
+		return false
+	}
+
+	for index in 0 ..< child_count {
+		new_weight := parent.weights[index]
+		if index == target_index {
+			new_weight += amount
+		} else {
+			new_weight += other_delta
+		}
+
+		if new_weight < min_weight {
+			return false
+		}
+		new_weights[index] = new_weight
+	}
+
+	for index in 0 ..< child_count {
+		parent.weights[index] = new_weights[index]
+	}
+	return true
+}
+
 focus_direction :: proc(app: ^App, direction: Direction) -> bool {
 	workspace := active_workspace(app)
 	if workspace == nil || workspace.root == nil {
@@ -639,11 +710,13 @@ layout_split_horizontal :: proc(node: ^Node, bounds: Rect) {
 		return
 	}
 
+	repair_container_focus_and_weights(node)
+	weight_sum := node_weight_sum(node)
 	remaining_width := bounds.width
 	x := bounds.x
 
 	for index in 0 ..< child_count {
-		child_width := bounds.width / child_count
+		child_width := int(f32(bounds.width) * (node.weights[index] / weight_sum))
 		if index == child_count - 1 {
 			child_width = remaining_width
 		}
@@ -666,11 +739,13 @@ layout_split_vertical :: proc(node: ^Node, bounds: Rect) {
 		return
 	}
 
+	repair_container_focus_and_weights(node)
+	weight_sum := node_weight_sum(node)
 	remaining_height := bounds.height
 	y := bounds.y
 
 	for index in 0 ..< child_count {
-		child_height := bounds.height / child_count
+		child_height := int(f32(bounds.height) * (node.weights[index] / weight_sum))
 		if index == child_count - 1 {
 			child_height = remaining_height
 		}
@@ -685,4 +760,15 @@ layout_split_vertical :: proc(node: ^Node, bounds: Rect) {
 		y += child_height
 		remaining_height -= child_height
 	}
+}
+
+node_weight_sum :: proc(node: ^Node) -> f32 {
+	total: f32 = 0
+	for weight in node.weights {
+		total += weight
+	}
+	if total <= 0 {
+		return 1
+	}
+	return total
 }

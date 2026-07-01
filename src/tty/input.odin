@@ -14,7 +14,11 @@ wait :: proc(timeout_ms: int) -> bool {
 	return posix.poll(&poll_fd, 1, c.int(timeout_ms)) > 0
 }
 
-read_input_action :: proc() -> input.Action {
+read_input_action :: proc(mode := input.Input_Mode.Normal) -> input.Action {
+	if mode == .Resize {
+		return read_resize_input_action()
+	}
+
 	key, ok := read_input_byte()
 	if !ok {
 		return input.Action{kind = .None}
@@ -62,6 +66,8 @@ action_from_modified_key :: proc(key: byte) -> input.Action {
 		return input.Action{kind = .Command, command = domain.command_close_pane()}
 	case 't':
 		return input.Action{kind = .Command, command = domain.command_dump_tree()}
+	case 'r':
+		return input.Action{kind = .Enter_Resize_Mode}
 	case 'h':
 		return input.Action{kind = .Command, command = domain.command_focus(.Left)}
 	case 'j':
@@ -72,6 +78,28 @@ action_from_modified_key :: proc(key: byte) -> input.Action {
 		return input.Action{kind = .Command, command = domain.command_focus(.Right)}
 	case '1' ..= '9':
 		return input.Action{kind = .Command, command = domain.command_switch_workspace(int(key - '0'))}
+	}
+
+	return input.Action{kind = .None}
+}
+
+read_resize_input_action :: proc() -> input.Action {
+	key, ok := read_input_byte()
+	if !ok {
+		return input.Action{kind = .None}
+	}
+
+	switch key {
+	case 0x1b, '\r', '\n':
+		return input.Action{kind = .Exit_Resize_Mode}
+	case 'h':
+		return input.Action{kind = .Command, command = domain.command_resize_shrink_width()}
+	case 'l':
+		return input.Action{kind = .Command, command = domain.command_resize_grow_width()}
+	case 'k':
+		return input.Action{kind = .Command, command = domain.command_resize_shrink_height()}
+	case 'j':
+		return input.Action{kind = .Command, command = domain.command_resize_grow_height()}
 	}
 
 	return input.Action{kind = .None}

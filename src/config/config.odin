@@ -175,6 +175,8 @@ apply_input_value :: proc(key: string, value: string, config: ^Config) {
 		config.bindings.close_pane = value
 	case "dump_tree":
 		config.bindings.dump_tree = value
+	case "resize_mode":
+		config.bindings.resize_mode = value
 	case "focus_left":
 		config.bindings.focus_left = value
 	case "focus_down":

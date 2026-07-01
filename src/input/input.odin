@@ -7,6 +7,11 @@ Mod_Key :: enum {
 	Super,
 }
 
+Input_Mode :: enum {
+	Normal,
+	Resize,
+}
+
 Key_Bindings :: struct {
 	quit:         string,
 	split_right:  string,
@@ -14,6 +19,7 @@ Key_Bindings :: struct {
 	open_pane:    string,
 	close_pane:   string,
 	dump_tree:    string,
+	resize_mode:  string,
 	focus_left:   string,
 	focus_down:   string,
 	focus_up:     string,
@@ -37,6 +43,7 @@ key_bindings_default :: proc() -> Key_Bindings {
 		open_pane = "enter",
 		close_pane = "w",
 		dump_tree = "t",
+		resize_mode = "r",
 		focus_left = "h",
 		focus_down = "j",
 		focus_up = "k",
@@ -59,6 +66,8 @@ Action_Kind :: enum {
 	Command,
 	Pane_Input,
 	Paste_Clipboard,
+	Enter_Resize_Mode,
+	Exit_Resize_Mode,
 }
 
 Action :: struct {

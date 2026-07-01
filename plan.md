@@ -186,6 +186,7 @@ Later features:
 
 - Added initial Odin structs for `App`, `Workspace`, `Node`, and `Pane`.
 - Added i3-style dynamic workspace initialization with numbered workspaces `1..9`: switching creates a workspace, empty workspaces disappear after switching away, and a workspace only persists once it has a pane.
+- Added first i3-style resize mode: `mod+r` enters resize mode, `h/l` or left/right shrink/grow width, `k/j` or up/down shrink/grow height, and enter/escape/`mod+r` exits; resizing mutates split container weights rather than pane bounds.
 - Workspaces now create their first pane only when opened or modified.
 - Added basic active workspace switching.
 - Added an initial command layer for split intent selection, opening panes, workspace switching, focus movement, and pane close.

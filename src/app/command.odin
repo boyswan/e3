@@ -6,6 +6,10 @@ Command_Kind :: enum {
 	Open_Pane,
 	Switch_Workspace,
 	Focus,
+	Resize_Grow_Width,
+	Resize_Shrink_Width,
+	Resize_Grow_Height,
+	Resize_Shrink_Height,
 	Close_Pane,
 	Dump_Tree,
 }
@@ -36,6 +40,22 @@ command_focus :: proc(direction: Direction) -> Command {
 	return Command{kind = .Focus, direction = direction}
 }
 
+command_resize_grow_width :: proc() -> Command {
+	return Command{kind = .Resize_Grow_Width}
+}
+
+command_resize_shrink_width :: proc() -> Command {
+	return Command{kind = .Resize_Shrink_Width}
+}
+
+command_resize_grow_height :: proc() -> Command {
+	return Command{kind = .Resize_Grow_Height}
+}
+
+command_resize_shrink_height :: proc() -> Command {
+	return Command{kind = .Resize_Shrink_Height}
+}
+
 command_close_pane :: proc() -> Command {
 	return Command{kind = .Close_Pane}
 }
@@ -56,6 +76,14 @@ execute_command :: proc(app: ^App, command: Command) -> bool {
 		return switch_workspace(app, command.workspace_id)
 	case .Focus:
 		return focus_direction(app, command.direction)
+	case .Resize_Grow_Width:
+		return resize_dimension(app, .Split_Horizontal, 0.10)
+	case .Resize_Shrink_Width:
+		return resize_dimension(app, .Split_Horizontal, -0.10)
+	case .Resize_Grow_Height:
+		return resize_dimension(app, .Split_Vertical, 0.10)
+	case .Resize_Shrink_Height:
+		return resize_dimension(app, .Split_Vertical, -0.10)
 	case .Close_Pane:
 		return close_focused_pane(app)
 	case .Dump_Tree:

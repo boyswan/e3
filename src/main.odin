@@ -37,6 +37,7 @@ main :: proc() {
 		tty.restore_mode(&mode)
 	}
 
+	input_mode := input.Input_Mode.Normal
 	running := true
 	for running {
 		domain.poll_all_terminals(&state)
@@ -52,10 +53,11 @@ main :: proc() {
 			&r.surface,
 			&state,
 			domain.Rect{x = 0, y = 0, width = renderer.width(&r), height = renderer.height(&r)},
+			input_mode,
 		)
 		renderer.present(&r)
 
-		action := read_next_action(&r, config.mod_key, config.bindings)
+		action := read_next_action(&r, input_mode, config.mod_key, config.bindings)
 		if action.kind == .None {
 			continue
 		}
@@ -77,12 +79,17 @@ main :: proc() {
 					delete(paste)
 				}
 			}
+		case .Enter_Resize_Mode:
+			input_mode = .Resize
+		case .Exit_Resize_Mode:
+			input_mode = .Normal
 		}
 	}
 }
 
 read_next_action :: proc(
 	r: ^renderer.Renderer,
+	mode: input.Input_Mode,
 	mod_key: input.Mod_Key,
 	bindings: input.Key_Bindings,
 ) -> input.Action {
@@ -90,10 +97,10 @@ read_next_action :: proc(
 		if !tty.wait(50) {
 			return input.Action{kind = .None}
 		}
-		return tty.read_input_action()
+		return tty.read_input_action(mode)
 	}
 
-	action := native.read_input_action(&r.sdl, &r.surface, mod_key, bindings)
+	action := native.read_input_action(&r.sdl, &r.surface, mode, mod_key, bindings)
 	if action.kind == .None {
 		native.wait(16)
 	}

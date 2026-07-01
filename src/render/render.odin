@@ -1,8 +1,9 @@
 package render
 
 import domain "../app"
+import input "../input"
 
-render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Rect) {
+render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Rect, mode := input.Input_Mode.Normal) {
 	workspace := domain.active_workspace(state)
 	if workspace == nil {
 		return
@@ -21,12 +22,12 @@ render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Re
 	domain.sync_pane_terminals(workspace.root)
 	render_split_separators(buffer, workspace.root)
 	screen_draw_box(buffer, content_bounds)
-	render_focused_pane_border(buffer, state, workspace, content_bounds)
+	render_focused_pane_border(buffer, state, workspace, content_bounds, mode)
 	render_pane_labels(buffer, workspace.root, workspace.focused_pane_id)
-	render_workspace_bar(buffer, state, domain.Rect{x = bounds.x, y = bounds.y + bounds.height - 1, width = bounds.width, height = 1})
+	render_workspace_bar(buffer, state, mode, domain.Rect{x = bounds.x, y = bounds.y + bounds.height - 1, width = bounds.width, height = 1})
 }
 
-render_workspace_bar :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Rect) {
+render_workspace_bar :: proc(buffer: ^Screen_Buffer, state: ^domain.App, mode: input.Input_Mode, bounds: domain.Rect) {
 	cursor_x := bounds.x
 
 	for index in 0 ..< len(state.workspaces) {
@@ -42,6 +43,11 @@ render_workspace_bar :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds:
 			active_bg := buffer.palette[0]
 			screen_set_range_background(buffer, start_x, bounds.y, cursor_x - start_x, active_bg.r, active_bg.g, active_bg.b)
 		}
+	}
+
+	if mode == .Resize {
+		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " resize", true, .Split_Hint)
+		return
 	}
 
 	split_kind, has_split_kind := focused_insertion_kind(state)
@@ -158,7 +164,7 @@ render_pane_label :: proc(buffer: ^Screen_Buffer, pane: ^domain.Pane, focused: b
 	render_terminal_contents(buffer, pane, focused)
 }
 
-render_focused_pane_border :: proc(buffer: ^Screen_Buffer, state: ^domain.App, workspace: ^domain.Workspace, content_bounds: domain.Rect) {
+render_focused_pane_border :: proc(buffer: ^Screen_Buffer, state: ^domain.App, workspace: ^domain.Workspace, content_bounds: domain.Rect, mode: input.Input_Mode) {
 	focused := domain.find_focused_node(workspace.root, workspace.focused_pane_id)
 	if focused == nil || focused.pane == nil {
 		return
@@ -177,14 +183,23 @@ render_focused_pane_border :: proc(buffer: ^Screen_Buffer, state: ^domain.App, w
 		bottom = content_bounds.y + content_bounds.height - 1
 	}
 
+	border_color := Cell_Color.Focused
+	if mode == .Resize {
+		border_color = .Split_Hint
+	}
+
 	for x in left ..= right {
-		screen_set_color(buffer, x, top, .Focused)
-		screen_set_color(buffer, x, bottom, .Focused)
+		screen_set_color(buffer, x, top, border_color)
+		screen_set_color(buffer, x, bottom, border_color)
 	}
 
 	for y in top ..= bottom {
-		screen_set_color(buffer, left, y, .Focused)
-		screen_set_color(buffer, right, y, .Focused)
+		screen_set_color(buffer, left, y, border_color)
+		screen_set_color(buffer, right, y, border_color)
+	}
+
+	if mode == .Resize {
+		return
 	}
 
 	split_kind, has_split_kind := focused_node_insertion_kind(focused)

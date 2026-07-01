@@ -5,14 +5,14 @@ import input "../input"
 import render "../render"
 import sdl3 "vendor:sdl3"
 
-read_input_action :: proc(state: ^State, surface: ^render.Screen_Buffer, mod_key: input.Mod_Key, bindings: input.Key_Bindings) -> input.Action {
+read_input_action :: proc(state: ^State, surface: ^render.Screen_Buffer, mode: input.Input_Mode, mod_key: input.Mod_Key, bindings: input.Key_Bindings) -> input.Action {
 	event: sdl3.Event
 	for sdl3.PollEvent(&event) {
 		#partial switch event.type {
 		case .QUIT, .WINDOW_CLOSE_REQUESTED:
 			return input.Action{kind = .Quit}
 		case .KEY_DOWN:
-			action := key_action(state, surface, event.key, mod_key, bindings)
+			action := key_action(state, surface, mode, event.key, mod_key, bindings)
 			if action.kind != .None {
 				return action
 			}
@@ -23,9 +23,11 @@ read_input_action :: proc(state: ^State, surface: ^render.Screen_Buffer, mod_key
 		case .MOUSE_BUTTON_UP:
 			handle_mouse_button_up(state, surface, event.button)
 		case .TEXT_INPUT:
-			action := cstring_input_action(event.text.text)
-			if action.kind != .None {
-				return action
+			if mode == .Normal {
+				action := cstring_input_action(event.text.text)
+				if action.kind != .None {
+					return action
+				}
 			}
 		}
 	}
@@ -54,10 +56,14 @@ wait :: proc(timeout_ms: int) {
 	sdl3.Delay(u32(timeout_ms))
 }
 
-key_action :: proc(state: ^State, surface: ^render.Screen_Buffer, event: sdl3.KeyboardEvent, mod_key: input.Mod_Key, bindings: input.Key_Bindings) -> input.Action {
+key_action :: proc(state: ^State, surface: ^render.Screen_Buffer, mode: input.Input_Mode, event: sdl3.KeyboardEvent, mod_key: input.Mod_Key, bindings: input.Key_Bindings) -> input.Action {
 	ctrl := event.mod & sdl3.KMOD_CTRL != {}
 	shift := event.mod & sdl3.KMOD_SHIFT != {}
 	gui := event.mod & sdl3.KMOD_GUI != {}
+
+	if mode == .Resize {
+		return resize_mode_key_action(event, mod_key, bindings)
+	}
 
 	if (gui && event.key == sdl3.K_C) || (ctrl && shift && event.key == sdl3.K_C) || event.key == sdl3.K_COPY {
 		copy_selection_to_clipboard(state, surface)
@@ -159,6 +165,29 @@ ctrl_key_action :: proc(key: sdl3.Keycode) -> input.Action {
 	return input.Action{kind = .None}
 }
 
+resize_mode_key_action :: proc(event: sdl3.KeyboardEvent, mod_key: input.Mod_Key, bindings: input.Key_Bindings) -> input.Action {
+	shift := event.mod & sdl3.KMOD_SHIFT != {}
+	if event.key == sdl3.K_ESCAPE || event.key == sdl3.K_RETURN || event.key == sdl3.K_KP_ENTER {
+		return input.Action{kind = .Exit_Resize_Mode}
+	}
+	if mod_key_pressed(event.mod, mod_key) && key_matches(event.key, shift, bindings.resize_mode) {
+		return input.Action{kind = .Exit_Resize_Mode}
+	}
+
+	switch event.key {
+	case sdl3.K_H, sdl3.K_LEFT:
+		return input.Action{kind = .Command, command = domain.command_resize_shrink_width()}
+	case sdl3.K_L, sdl3.K_RIGHT:
+		return input.Action{kind = .Command, command = domain.command_resize_grow_width()}
+	case sdl3.K_K, sdl3.K_UP:
+		return input.Action{kind = .Command, command = domain.command_resize_shrink_height()}
+	case sdl3.K_J, sdl3.K_DOWN:
+		return input.Action{kind = .Command, command = domain.command_resize_grow_height()}
+	}
+
+	return input.Action{kind = .None}
+}
+
 mod_key_action :: proc(key: sdl3.Keycode, shift: bool, bindings: input.Key_Bindings) -> input.Action {
 	if key_matches(key, shift, bindings.quit) {
 		return input.Action{kind = .Quit}
@@ -177,6 +206,9 @@ mod_key_action :: proc(key: sdl3.Keycode, shift: bool, bindings: input.Key_Bindi
 	}
 	if key_matches(key, shift, bindings.dump_tree) {
 		return input.Action{kind = .Command, command = domain.command_dump_tree()}
+	}
+	if key_matches(key, shift, bindings.resize_mode) {
+		return input.Action{kind = .Enter_Resize_Mode}
 	}
 	if key_matches(key, shift, bindings.focus_left) {
 		return input.Action{kind = .Command, command = domain.command_focus(.Left)}
