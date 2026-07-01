@@ -683,8 +683,19 @@ toggle_split_kind :: proc(kind: Node_Kind) -> Node_Kind {
 }
 
 layout_tabbed :: proc(app: ^App) -> bool {
+	return layout_container(app, .Tabbed)
+}
+
+layout_stacking :: proc(app: ^App) -> bool {
+	return layout_container(app, .Stacked)
+}
+
+layout_container :: proc(app: ^App, kind: Node_Kind) -> bool {
 	workspace := active_workspace(app)
 	if workspace == nil || workspace.root == nil {
+		return false
+	}
+	if kind != .Tabbed && kind != .Stacked {
 		return false
 	}
 
@@ -695,7 +706,7 @@ layout_tabbed :: proc(app: ^App) -> bool {
 
 	parent := focused.parent
 	if parent == nil {
-		container := make_container_node(.Tabbed)
+		container := make_container_node(kind)
 		container.last_split_kind = workspace.default_split_kind
 		container.parent = nil
 		focused.parent = container
@@ -710,7 +721,7 @@ layout_tabbed :: proc(app: ^App) -> bool {
 	if is_split_kind(parent.kind) {
 		parent.last_split_kind = parent.kind
 	}
-	parent.kind = .Tabbed
+	parent.kind = kind
 	repair_container_focus_and_weights(parent)
 	return focus_node(workspace, focused)
 }
@@ -745,7 +756,7 @@ layout_toggle_split :: proc(app: ^App) -> bool {
 		return focus_node(workspace, focused)
 	}
 
-	if parent.kind == .Tabbed {
+	if parent.kind == .Tabbed || parent.kind == .Stacked {
 		split_kind := parent.last_split_kind
 		if !is_split_kind(split_kind) {
 			split_kind = .Split_Horizontal
@@ -1224,18 +1235,33 @@ layout_node :: proc(node: ^Node, bounds: Rect) {
 	case .Split_Vertical:
 		layout_split_vertical(node, bounds)
 	case .Stacked:
-		if len(node.children) == 0 {
-			return
-		}
-
-		index := node.focused_child_index
-		if index < 0 || index >= len(node.children) {
-			index = 0
-		}
-
-		layout_node(node.children[index], bounds)
+		layout_stacked_node(node, bounds)
 	case .Tabbed:
 		layout_tabbed_node(node, bounds)
+	}
+}
+
+layout_stacked_node :: proc(node: ^Node, bounds: Rect) {
+	child_count := len(node.children)
+	if child_count == 0 {
+		return
+	}
+
+	repair_container_focus_and_weights(node)
+	deco_height := 1
+	content := bounds
+	deco_total := child_count * deco_height
+	if content.height > deco_total {
+		content.y += deco_total
+		content.height -= deco_total
+	} else {
+		content.height = 0
+	}
+
+	for index in 0 ..< child_count {
+		child := node.children[index]
+		layout_node(child, content)
+		child.deco_bounds = Rect{x = bounds.x, y = bounds.y + index * deco_height, width = bounds.width, height = deco_height}
 	}
 }
 

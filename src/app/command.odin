@@ -13,6 +13,7 @@ Command_Kind :: enum {
 	Move_Pane,
 	Layout_Toggle_Split,
 	Layout_Tabbed,
+	Layout_Stacking,
 	Close_Pane,
 	Dump_Tree,
 }
@@ -71,6 +72,10 @@ command_layout_tabbed :: proc() -> Command {
 	return Command{kind = .Layout_Tabbed}
 }
 
+command_layout_stacking :: proc() -> Command {
+	return Command{kind = .Layout_Stacking}
+}
+
 command_close_pane :: proc() -> Command {
 	return Command{kind = .Close_Pane}
 }
@@ -105,6 +110,8 @@ execute_command :: proc(app: ^App, command: Command) -> bool {
 		return layout_toggle_split(app)
 	case .Layout_Tabbed:
 		return layout_tabbed(app)
+	case .Layout_Stacking:
+		return layout_stacking(app)
 	case .Close_Pane:
 		return close_focused_pane(app)
 	case .Dump_Tree:

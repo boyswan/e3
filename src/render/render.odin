@@ -152,6 +152,7 @@ render_tab_bars :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
 			render_tab_bars(buffer, child)
 		}
 	case .Stacked:
+		render_stack_bar(buffer, node)
 		child := domain.focused_child(node)
 		if child != nil {
 			render_tab_bars(buffer, child)
@@ -162,6 +163,30 @@ render_tab_bars :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
 		if child != nil {
 			render_tab_bars(buffer, child)
 		}
+	}
+}
+
+render_stack_bar :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
+	child_count := len(node.children)
+	if child_count == 0 {
+		return
+	}
+
+	focused := domain.focused_child(node)
+	focused_colors := Workspace_Button_Colors{border = RGB_Color{0x4c, 0x78, 0x99}, background = RGB_Color{0x28, 0x55, 0x77}, text = RGB_Color{0xff, 0xff, 0xff}}
+	inactive_colors := Workspace_Button_Colors{border = RGB_Color{0x33, 0x33, 0x33}, background = RGB_Color{0x22, 0x22, 0x22}, text = RGB_Color{0x88, 0x88, 0x88}}
+
+	for child in node.children {
+		deco := child.deco_bounds
+		if deco.width <= 0 || deco.height <= 0 {
+			continue
+		}
+
+		colors := inactive_colors
+		if child == focused {
+			colors = focused_colors
+		}
+		render_tab_button(buffer, child, deco.x, deco.y, deco.width, colors)
 	}
 }
 

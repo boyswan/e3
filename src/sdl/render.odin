@@ -621,12 +621,7 @@ draw_native_tab_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, n
 		for child in node.children {
 			draw_native_tab_borders(state, surface, child)
 		}
-	case .Stacked:
-		child := domain.focused_child(node)
-		if child != nil {
-			draw_native_tab_borders(state, surface, child)
-		}
-	case .Tabbed:
+	case .Stacked, .Tabbed:
 		border := surface.bar.separator
 		for child in node.children {
 			deco := child.deco_bounds
