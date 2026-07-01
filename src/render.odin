@@ -58,10 +58,19 @@ render_split_separators :: proc(buffer: ^Screen_Buffer, node: ^Node) {
 			return
 		}
 
+		line_y := bounds.y
+		line_height := bounds.height
+		if node.parent != nil && node.parent.kind == .Split_Vertical {
+			index := find_child_index(node.parent, node)
+			if index >= 0 && index < len(node.parent.children) - 1 {
+				line_height += 1
+			}
+		}
+
 		for index in 0 ..< len(node.children) - 1 {
 			child_bounds, child_ok := node_bounds(node.children[index])
 			if child_ok {
-				screen_draw_vertical_line(buffer, child_bounds.x + child_bounds.width, bounds.y, bounds.height)
+				screen_draw_vertical_line(buffer, child_bounds.x + child_bounds.width, line_y, line_height)
 			}
 		}
 	case .Split_Vertical:
@@ -74,10 +83,13 @@ render_split_separators :: proc(buffer: ^Screen_Buffer, node: ^Node) {
 			return
 		}
 
+		line_x := bounds.x
+		line_width := bounds.width
+
 		for index in 0 ..< len(node.children) - 1 {
 			child_bounds, child_ok := node_bounds(node.children[index])
 			if child_ok {
-				screen_draw_horizontal_line(buffer, bounds.x, child_bounds.y + child_bounds.height, bounds.width)
+				screen_draw_horizontal_line(buffer, line_x, child_bounds.y + child_bounds.height, line_width)
 			}
 		}
 	case .Stacked, .Tabbed:

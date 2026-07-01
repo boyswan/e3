@@ -193,12 +193,15 @@ Later features:
 - ANSI escape handling is isolated in the terminal output backend instead of being scattered through render code.
 - Renderer draws one outer frame, shared no-margin split separators, a colored focused-pane border, and a bottom workspace bar without a label.
 - Screen line drawing now composes box-drawing junctions (`┬`, `├`, `┴`, etc.) from line connection masks instead of overwriting glyphs.
+- Nested split separators extend to adjacent parent separators, so perpendicular split lines compose into proper junction glyphs instead of leaving disconnected `─`/`│` crossings.
 - Added one-shot terminal size detection via `ioctl(TIOCGWINSZ)` with an `80x24` fallback, so the initial render uses the current terminal dimensions.
 - Added a minimal interactive loop using alternate screen + raw terminal mode.
-- Added initial keybindings: `q` quits, `s` splits horizontally, `v` splits vertically, `h/j/k/l` move focus, and `1..9` switch workspaces.
+- Added initial keybindings: `q` quits, `s` splits horizontally, `v` splits vertically, `w` closes the focused pane, `h/j/k/l` move focus, and `1..9` switch workspaces.
 - Reworked focus movement to follow i3's tree-based behavior: climb ancestors until a matching split orientation is found, move to the adjacent sibling branch, then descend through that branch's saved focus path.
 - Focus movement uses i3-style wrapping: at an edge, keep climbing first; if no higher-level move exists, wrap within the nearest matching split.
 - Splitting inside a same-orientation parent now inserts the new pane directly after the focused pane instead of appending to the end.
+- Added layout cleanup helpers to remove empty containers, collapse one-child split containers, merge nested same-orientation splits, and repair weights/focus indexes.
+- Added focused pane close behavior; closing a pane removes it from the tree, selects a nearby fallback pane, and runs layout cleanup.
 - The render loop recreates the screen buffer when the terminal size changes, currently checked before each redraw/input cycle.
 - Terminal flushing no longer clears the screen on every frame; the alternate screen is cleared once on entry, then full frames overwrite cells in place to reduce flicker.
 - Added basic i3-style split tree creation for horizontal and vertical splits.

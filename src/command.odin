@@ -5,6 +5,7 @@ Command_Kind :: enum {
 	Split_Vertical,
 	Switch_Workspace,
 	Focus,
+	Close_Pane,
 }
 
 Command :: struct {
@@ -29,6 +30,10 @@ command_focus :: proc(direction: Direction) -> Command {
 	return Command{kind = .Focus, direction = direction}
 }
 
+command_close_pane :: proc() -> Command {
+	return Command{kind = .Close_Pane}
+}
+
 execute_command :: proc(app: ^App, command: Command) -> bool {
 	switch command.kind {
 	case .Split_Horizontal:
@@ -39,6 +44,8 @@ execute_command :: proc(app: ^App, command: Command) -> bool {
 		return switch_workspace(app, command.workspace_id)
 	case .Focus:
 		return focus_direction(app, command.direction)
+	case .Close_Pane:
+		return close_focused_pane(app)
 	}
 
 	return false

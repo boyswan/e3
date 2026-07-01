@@ -29,6 +29,8 @@ read_input_action :: proc() -> Input_Action {
 		return Input_Action{kind = .Command, command = command_split_horizontal()}
 	case 'v':
 		return Input_Action{kind = .Command, command = command_split_vertical()}
+	case 'w':
+		return Input_Action{kind = .Command, command = command_close_pane()}
 	case 'h':
 		return Input_Action{kind = .Command, command = command_focus(.Left)}
 	case 'j':
