@@ -54,6 +54,7 @@ make_workspace :: proc(id: int) -> Workspace {
 	return Workspace {
 		id = id,
 		name = workspace_name(id),
+		default_split_kind = .Split_Horizontal,
 	}
 }
 
@@ -67,6 +68,8 @@ ensure_workspace_pane :: proc(app: ^App, workspace: ^Workspace) -> bool {
 	}
 
 	pane := make_pane(app)
+	pane.split_kind = workspace.default_split_kind
+	pane.split_active = true
 	workspace.root = make_pane_node(pane)
 	workspace.focused_pane_id = pane.id
 	return true

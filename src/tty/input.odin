@@ -76,6 +76,14 @@ action_from_modified_key :: proc(key: byte) -> input.Action {
 		return input.Action{kind = .Command, command = domain.command_focus(.Up)}
 	case 'l':
 		return input.Action{kind = .Command, command = domain.command_focus(.Right)}
+	case 'H':
+		return input.Action{kind = .Command, command = domain.command_move_pane(.Left)}
+	case 'J':
+		return input.Action{kind = .Command, command = domain.command_move_pane(.Down)}
+	case 'K':
+		return input.Action{kind = .Command, command = domain.command_move_pane(.Up)}
+	case 'L':
+		return input.Action{kind = .Command, command = domain.command_move_pane(.Right)}
 	case '1' ..= '9':
 		return input.Action{kind = .Command, command = domain.command_switch_workspace(int(key - '0'))}
 	}

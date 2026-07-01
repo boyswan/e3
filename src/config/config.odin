@@ -185,6 +185,14 @@ apply_input_value :: proc(key: string, value: string, config: ^Config) {
 		config.bindings.focus_up = value
 	case "focus_right":
 		config.bindings.focus_right = value
+	case "move_left":
+		config.bindings.move_left = value
+	case "move_down":
+		config.bindings.move_down = value
+	case "move_up":
+		config.bindings.move_up = value
+	case "move_right":
+		config.bindings.move_right = value
 	case "workspace_1":
 		config.bindings.workspace_1 = value
 	case "workspace_2":

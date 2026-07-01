@@ -222,6 +222,18 @@ mod_key_action :: proc(key: sdl3.Keycode, shift: bool, bindings: input.Key_Bindi
 	if key_matches(key, shift, bindings.focus_right) {
 		return input.Action{kind = .Command, command = domain.command_focus(.Right)}
 	}
+	if key_matches(key, shift, bindings.move_left) {
+		return input.Action{kind = .Command, command = domain.command_move_pane(.Left)}
+	}
+	if key_matches(key, shift, bindings.move_down) {
+		return input.Action{kind = .Command, command = domain.command_move_pane(.Down)}
+	}
+	if key_matches(key, shift, bindings.move_up) {
+		return input.Action{kind = .Command, command = domain.command_move_pane(.Up)}
+	}
+	if key_matches(key, shift, bindings.move_right) {
+		return input.Action{kind = .Command, command = domain.command_move_pane(.Right)}
+	}
 	if key_matches(key, shift, bindings.workspace_1) {
 		return input.Action{kind = .Command, command = domain.command_switch_workspace(1)}
 	}

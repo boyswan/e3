@@ -78,6 +78,7 @@ Workspace :: struct {
 	name:            string,
 	root:            ^Node,
 	focused_pane_id: int,
+	default_split_kind: Node_Kind,
 }
 
 App :: struct {

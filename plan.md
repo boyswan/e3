@@ -187,9 +187,10 @@ Later features:
 - Added initial Odin structs for `App`, `Workspace`, `Node`, and `Pane`.
 - Added i3-style dynamic workspace initialization with numbered workspaces `1..9`: switching creates a workspace, empty workspaces disappear after switching away, and a workspace only persists once it has a pane.
 - Added first i3-style resize mode: `mod+r` enters resize mode, `h/l` or left/right shrink/grow width, `k/j` or up/down shrink/grow height, and enter/escape/`mod+r` exits; resizing mutates split container weights rather than pane bounds.
+- Added i3-style pane movement: `mod+shift+h/j/k/l` moves the focused pane left/down/up/right, including same-parent sibling swaps, pulling panes out to the nearest matching split ancestor without wraparound, and moving panes into adjacent branch containers using edge-descendant targeting.
 - Workspaces now create their first pane only when opened or modified.
 - Added basic active workspace switching.
-- Added an initial command layer for split intent selection, opening panes, workspace switching, focus movement, and pane close.
+- Added an initial command layer for split intent selection, opening panes, workspace switching, focus movement, and pane close; split/open semantics now better match i3 by allowing normal opens in the focused insertion container and preserving per-workspace default split orientation for empty/first-pane workspaces.
 - Added a cell-buffer renderer: layout writes into `Screen_Buffer`, then a backend presents the surface.
 - Introduced a `Renderer` abstraction with `TTY` and `SDL3` backends so UI/layout rendering is no longer wired directly to terminal output.
 - Added a first SDL3 backend using Odin's `vendor:sdl3`: it opens a resizable native window, maps the cell surface to SDL debug text, and presents the same mux UI through SDL.

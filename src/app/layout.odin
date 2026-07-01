@@ -176,9 +176,16 @@ insert_child_after :: proc(parent: ^Node, existing: ^Node, child: ^Node) -> bool
 		return false
 	}
 
-	insert_index := index + 1
+	return insert_child_at(parent, child, index + 1, 1.0)
+}
+
+insert_child_at :: proc(parent: ^Node, child: ^Node, insert_index: int, weight: f32) -> bool {
+	if parent == nil || child == nil || insert_index < 0 || insert_index > len(parent.children) {
+		return false
+	}
+
 	append(&parent.children, child)
-	append(&parent.weights, 1.0)
+	append(&parent.weights, weight)
 
 	for move_index := len(parent.children) - 1; move_index > insert_index; move_index -= 1 {
 		parent.children[move_index] = parent.children[move_index - 1]
@@ -186,7 +193,7 @@ insert_child_after :: proc(parent: ^Node, existing: ^Node, child: ^Node) -> bool
 	}
 
 	parent.children[insert_index] = child
-	parent.weights[insert_index] = 1.0
+	parent.weights[insert_index] = weight
 	child.parent = parent
 	parent.focused_child_index = insert_index
 	return true
@@ -194,8 +201,12 @@ insert_child_after :: proc(parent: ^Node, existing: ^Node, child: ^Node) -> bool
 
 apply_split_context :: proc(app: ^App, kind: Node_Kind) -> bool {
 	workspace := active_workspace(app)
-	if workspace == nil || workspace.root == nil {
+	if workspace == nil {
 		return false
+	}
+	if workspace.root == nil {
+		workspace.default_split_kind = kind
+		return true
 	}
 
 	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
@@ -252,7 +263,7 @@ open_pane :: proc(app: ^App) -> bool {
 	}
 
 	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
-	if focused == nil || focused.kind != .Pane || focused.pane == nil || !focused.pane.split_active {
+	if focused == nil || focused.kind != .Pane || focused.pane == nil {
 		return false
 	}
 
@@ -459,7 +470,7 @@ cleanup_node :: proc(node: ^Node) -> ^Node {
 	}
 
 	if is_split_kind(node.kind) {
-		if len(node.children) == 1 && !node_has_active_split_context(node) {
+		if len(node.children) == 1 && !node_has_active_split_context(node) && single_child_split_is_redundant(node) {
 			child := node.children[0]
 			child.parent = node.parent
 			return child
@@ -468,6 +479,16 @@ cleanup_node :: proc(node: ^Node) -> ^Node {
 
 	repair_container_focus_and_weights(node)
 	return node
+}
+
+single_child_split_is_redundant :: proc(node: ^Node) -> bool {
+	if node == nil || !is_split_kind(node.kind) {
+		return false
+	}
+	if node.parent == nil {
+		return true
+	}
+	return node.parent.kind == node.kind
 }
 
 is_split_kind :: proc(kind: Node_Kind) -> bool {
@@ -541,6 +562,292 @@ repair_container_focus_and_weights :: proc(node: ^Node) {
 	if node.focused_child_index < 0 || node.focused_child_index >= len(node.children) {
 		node.focused_child_index = 0
 	}
+}
+
+move_pane_direction :: proc(app: ^App, direction: Direction) -> bool {
+	workspace := active_workspace(app)
+	if workspace == nil || workspace.root == nil {
+		return false
+	}
+
+	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+	if focused == nil || focused.kind != .Pane || focused.pane == nil {
+		return false
+	}
+
+	wanted_kind := orientation_from_direction(direction)
+	previous := is_previous_direction(direction)
+	current := focused
+	found_matching_orientation := false
+
+	for current.parent != nil {
+		parent := current.parent
+		if parent.kind == wanted_kind {
+			found_matching_orientation = true
+		}
+		if parent.kind == wanted_kind && len(parent.children) > 1 {
+			index := find_child_index(parent, current)
+			if index < 0 {
+				return false
+			}
+
+			neighbor_index := index + 1
+			if previous {
+				neighbor_index = index - 1
+			}
+			if neighbor_index < 0 || neighbor_index >= len(parent.children) {
+				current = parent
+				continue
+			}
+
+			neighbor := parent.children[neighbor_index]
+			if current == focused {
+				if neighbor.kind == .Pane {
+					return swap_focused_with_sibling(workspace, parent, index, neighbor_index, focused)
+				}
+				return move_focused_into_branch(workspace, focused, neighbor, direction)
+			}
+
+			if neighbor.kind != .Pane {
+				return move_focused_into_branch(workspace, focused, neighbor, direction)
+			}
+
+			insert_index := index
+			if !previous {
+				insert_index = index + 1
+			}
+			return move_focused_out_to_parent(workspace, focused, parent, insert_index)
+		}
+
+		current = parent
+	}
+
+	if found_matching_orientation {
+		return false
+	}
+
+	return move_focused_to_new_workspace_split(workspace, focused, direction)
+}
+
+move_focused_to_new_workspace_split :: proc(workspace: ^Workspace, focused: ^Node, direction: Direction) -> bool {
+	if workspace == nil || workspace.root == nil || focused == nil {
+		return false
+	}
+	if workspace.root == focused {
+		return false
+	}
+
+	weight, detached := detach_node_from_parent(focused)
+	if !detached {
+		return false
+	}
+
+	old_root := workspace.root
+	if old_root == nil {
+		workspace.root = focused
+		focused.parent = nil
+		return focus_node(workspace, focused)
+	}
+
+	wanted_kind := orientation_from_direction(direction)
+	previous := is_previous_direction(direction)
+	if old_root.kind != wanted_kind && len(old_root.children) == 1 && old_root.children[0].kind == wanted_kind {
+		target := old_root.children[0]
+		insert_index := len(target.children)
+		if previous {
+			insert_index = 0
+		}
+		if !insert_child_at(target, focused, insert_index, weight) {
+			return false
+		}
+		cleanup_workspace(workspace)
+		return focus_node(workspace, focused)
+	}
+
+	container := make_container_node(wanted_kind)
+	if previous {
+		append(&container.children, focused)
+		append(&container.children, old_root)
+		append(&container.weights, weight)
+		append(&container.weights, 1.0)
+		container.focused_child_index = 0
+	} else {
+		append(&container.children, old_root)
+		append(&container.children, focused)
+		append(&container.weights, 1.0)
+		append(&container.weights, weight)
+		container.focused_child_index = 1
+	}
+
+	focused.parent = container
+	old_root.parent = container
+	workspace.root = container
+	cleanup_workspace(workspace)
+	return focus_node(workspace, focused)
+}
+
+swap_focused_with_sibling :: proc(workspace: ^Workspace, parent: ^Node, index: int, neighbor_index: int, focused: ^Node) -> bool {
+	parent.children[index], parent.children[neighbor_index] = parent.children[neighbor_index], parent.children[index]
+	parent.weights[index], parent.weights[neighbor_index] = parent.weights[neighbor_index], parent.weights[index]
+	parent.focused_child_index = neighbor_index
+	cleanup_workspace(workspace)
+	return focus_node(workspace, focused)
+}
+
+move_focused_out_to_parent :: proc(workspace: ^Workspace, focused: ^Node, target_parent: ^Node, insert_index: int) -> bool {
+	old_parent := focused.parent
+	if old_parent == nil || target_parent == nil {
+		return false
+	}
+
+	weight, detached := detach_node_from_parent(focused)
+	if !detached {
+		return false
+	}
+
+	target_index := insert_index
+	if target_index > len(target_parent.children) {
+		target_index = len(target_parent.children)
+	}
+	if !insert_child_at(target_parent, focused, target_index, weight) {
+		return false
+	}
+
+	cleanup_workspace(workspace)
+	return focus_node(workspace, focused)
+}
+
+move_focused_into_branch :: proc(workspace: ^Workspace, focused: ^Node, branch: ^Node, direction: Direction) -> bool {
+	if workspace == nil || focused == nil || branch == nil || branch.kind == .Pane {
+		return false
+	}
+
+	target := descend_edge_for_move(branch, direction)
+	if target == nil {
+		return false
+	}
+
+	weight, detached := detach_node_from_parent(focused)
+	if !detached {
+		return false
+	}
+
+	if !insert_node_near_target(workspace, focused, target, direction, weight) {
+		return false
+	}
+
+	cleanup_workspace(workspace)
+	return focus_node(workspace, focused)
+}
+
+detach_node_from_parent :: proc(node: ^Node) -> (f32, bool) {
+	parent := node.parent
+	if parent == nil {
+		return 1.0, false
+	}
+
+	index := find_child_index(parent, node)
+	if index < 0 {
+		return 1.0, false
+	}
+
+	weight: f32 = 1.0
+	if index < len(parent.weights) {
+		weight = parent.weights[index]
+	}
+
+	ordered_remove(&parent.children, index)
+	if index < len(parent.weights) {
+		ordered_remove(&parent.weights, index)
+	}
+	node.parent = nil
+	return weight, true
+}
+
+descend_edge_for_move :: proc(node: ^Node, direction: Direction) -> ^Node {
+	current := node
+	wanted_kind := orientation_from_direction(direction)
+	previous := is_previous_direction(direction)
+
+	for current != nil && current.kind != .Pane {
+		if len(current.children) == 0 {
+			return nil
+		}
+
+		index := current.focused_child_index
+		if current.kind == wanted_kind {
+			if previous {
+				index = len(current.children) - 1
+			} else {
+				index = 0
+			}
+		} else {
+			// i3 uses focus order here. We only track one focused child index, and
+			// after moving a pane out of a branch that is not enough to reproduce
+			// i3's stable re-entry point. Use the far edge of the mismatched branch
+			// so repeated out/in moves return to the same bottom/right slot instead
+			// of alternating between middle and end positions.
+			index = len(current.children) - 1
+		}
+
+		current = current.children[index]
+	}
+
+	return current
+}
+
+insert_node_near_target :: proc(workspace: ^Workspace, node: ^Node, target: ^Node, direction: Direction, weight: f32) -> bool {
+	parent := target.parent
+	kind := orientation_from_direction(direction)
+	previous := is_previous_direction(direction)
+
+	if parent != nil {
+		index := find_child_index(parent, target)
+		if index < 0 {
+			return false
+		}
+
+		// Mirrors i3's move.c position choice:
+		// if the target parent is not oriented like the move, or if moving
+		// left/up, insert after the edge target; otherwise insert before it.
+		insert_index := index
+		if parent.kind != kind || previous {
+			insert_index = index + 1
+		}
+		return insert_child_at(parent, node, insert_index, weight)
+	}
+
+	container := make_container_node(kind)
+	if previous {
+		append(&container.children, target)
+		append(&container.children, node)
+	} else {
+		append(&container.children, node)
+		append(&container.children, target)
+	}
+	append(&container.weights, 1.0)
+	append(&container.weights, weight)
+	container.focused_child_index = 0
+	if previous {
+		container.focused_child_index = 1
+	}
+	node.parent = container
+	target.parent = container
+
+	if parent == nil {
+		workspace.root = container
+		container.parent = nil
+		return true
+	}
+
+	index := find_child_index(parent, target)
+	if index < 0 {
+		return false
+	}
+	parent.children[index] = container
+	container.parent = parent
+	parent.focused_child_index = index
+	return true
 }
 
 resize_dimension :: proc(app: ^App, orientation: Node_Kind, step: f32) -> bool {
