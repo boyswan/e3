@@ -12,10 +12,12 @@
       {
         devShells.default = pkgs.mkShell {
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+            pkgs.sdl3
           ];
           buildInputs = with pkgs; [
             odin
             ols
+            sdl3
           ];
         };
       });

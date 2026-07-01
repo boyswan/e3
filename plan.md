@@ -190,8 +190,12 @@ Later features:
 - Added basic active workspace switching.
 - Added an initial command layer for split intent selection, opening panes, workspace switching, focus movement, and pane close.
 - Added a cell-buffer renderer: layout writes into `Screen_Buffer`, then a backend presents the surface.
-- Introduced a `Renderer` abstraction with `TTY` and placeholder `SDL3` backends so UI/layout rendering is no longer wired directly to terminal output.
+- Introduced a `Renderer` abstraction with `TTY` and `SDL3` backends so UI/layout rendering is no longer wired directly to terminal output.
+- Added a first SDL3 backend using Odin's `vendor:sdl3`: it opens a resizable native window, maps the cell surface to SDL debug text, and presents the same mux UI through SDL.
 - Reorganized source into focused packages instead of a single mux package: `src/app` for state/tree/commands/panes, `src/render` for surfaces/renderers/backends, and `src/platform` for TTY input/mode/size, with `src/main.odin` as the executable entrypoint.
+- SDL3/native rendering is now the default; pass `--tty` or `--terminal` to use the terminal renderer.
+- SDL3 mode now uses native SDL keyboard/text/window events instead of terminal stdin/raw mode: Alt keybindings map to existing mux commands, text and special keys route to the focused PTY, and window close quits.
+- Improved SDL3 presentation: larger native cells/text and vector-drawn 1px separator/border lines instead of relying on tiny debug-text box-drawing glyphs.
 - ANSI escape handling is isolated in the TTY backend instead of being scattered through render code.
 - Renderer draws one outer frame, shared no-margin split separators, a colored focused-pane border, and a bottom workspace bar without a label.
 - Focused pane insert hint is inactive until split mode is entered; active split-right colors the focused pane's right edge and active split-down colors its bottom edge.
