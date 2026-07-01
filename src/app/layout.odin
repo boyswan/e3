@@ -194,7 +194,7 @@ insert_child_after :: proc(parent: ^Node, existing: ^Node, child: ^Node) -> bool
 
 apply_split_context :: proc(app: ^App, kind: Node_Kind) -> bool {
 	workspace := active_workspace(app)
-	if !ensure_workspace_pane(app, workspace) {
+	if workspace == nil || workspace.root == nil {
 		return false
 	}
 
@@ -282,7 +282,7 @@ open_pane :: proc(app: ^App) -> bool {
 
 split_focused_pane :: proc(app: ^App, horizontal: bool) -> bool {
 	workspace := active_workspace(app)
-	if !ensure_workspace_pane(app, workspace) {
+	if workspace == nil || workspace.root == nil {
 		return false
 	}
 
@@ -545,7 +545,7 @@ repair_container_focus_and_weights :: proc(node: ^Node) {
 
 focus_direction :: proc(app: ^App, direction: Direction) -> bool {
 	workspace := active_workspace(app)
-	if !ensure_workspace_pane(app, workspace) {
+	if workspace == nil || workspace.root == nil {
 		return false
 	}
 

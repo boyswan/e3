@@ -77,14 +77,14 @@ init_app :: proc(app: ^App) {
 	app.active_workspace_index = 0
 	app.next_pane_id = 1
 
-	for id in 1 ..= 9 {
-		workspace := make_workspace(id)
-		append(&app.workspaces, workspace)
-	}
+	append(&app.workspaces, make_workspace(1))
 }
 
 active_workspace :: proc(app: ^App) -> ^Workspace {
 	if len(app.workspaces) == 0 {
+		return nil
+	}
+	if app.active_workspace_index < 0 || app.active_workspace_index >= len(app.workspaces) {
 		return nil
 	}
 
@@ -92,12 +92,65 @@ active_workspace :: proc(app: ^App) -> ^Workspace {
 }
 
 switch_workspace :: proc(app: ^App, id: int) -> bool {
+	if id <= 0 {
+		return false
+	}
+
+	active := active_workspace(app)
+	if active != nil && active.id == id {
+		return true
+	}
+
+	remove_empty_workspaces_except(app, id)
+
 	for index in 0 ..< len(app.workspaces) {
 		if app.workspaces[index].id == id {
 			app.active_workspace_index = index
-			return ensure_workspace_pane(app, &app.workspaces[index])
+			return true
 		}
 	}
 
-	return false
+	workspace := make_workspace(id)
+	insert_index := workspace_insert_index(app, id)
+	append(&app.workspaces, workspace)
+	for move_index := len(app.workspaces) - 1; move_index > insert_index; move_index -= 1 {
+		app.workspaces[move_index] = app.workspaces[move_index - 1]
+	}
+	app.workspaces[insert_index] = workspace
+	app.active_workspace_index = insert_index
+	return true
+}
+
+workspace_insert_index :: proc(app: ^App, id: int) -> int {
+	for index in 0 ..< len(app.workspaces) {
+		if app.workspaces[index].id > id {
+			return index
+		}
+	}
+	return len(app.workspaces)
+}
+
+remove_empty_workspaces_except :: proc(app: ^App, keep_id: int) {
+	previous_active_id := 0
+	if active := active_workspace(app); active != nil {
+		previous_active_id = active.id
+	}
+
+	index := 0
+	for index < len(app.workspaces) {
+		workspace := &app.workspaces[index]
+		if workspace.id != keep_id && workspace.root == nil {
+			ordered_remove(&app.workspaces, index)
+			continue
+		}
+		index += 1
+	}
+
+	app.active_workspace_index = 0
+	for index in 0 ..< len(app.workspaces) {
+		if app.workspaces[index].id == previous_active_id {
+			app.active_workspace_index = index
+			return
+		}
+	}
 }

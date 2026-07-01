@@ -185,7 +185,7 @@ Later features:
 ## Current Implementation Notes
 
 - Added initial Odin structs for `App`, `Workspace`, `Node`, and `Pane`.
-- Added lazy workspace initialization with numbered workspaces `1..9`.
+- Added i3-style dynamic workspace initialization with numbered workspaces `1..9`: switching creates a workspace, empty workspaces disappear after switching away, and a workspace only persists once it has a pane.
 - Workspaces now create their first pane only when opened or modified.
 - Added basic active workspace switching.
 - Added an initial command layer for split intent selection, opening panes, workspace switching, focus movement, and pane close.

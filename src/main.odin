@@ -3,24 +3,16 @@ package main
 import domain "./app"
 import cfg "./config"
 import input "./input"
-import "core:os"
 import render "./render"
 import renderer "./renderer"
 import native "./sdl"
 import tty "./tty"
+import "core:os"
 
 main :: proc() {
 	state: domain.App
 	domain.init_app(&state)
-
-	domain.execute_command(&state, domain.command_set_split_right())
 	domain.execute_command(&state, domain.command_open_pane())
-	domain.execute_command(&state, domain.command_set_split_down())
-	domain.execute_command(&state, domain.command_open_pane())
-	domain.execute_command(&state, domain.command_switch_workspace(2))
-	domain.execute_command(&state, domain.command_set_split_down())
-	domain.execute_command(&state, domain.command_open_pane())
-	domain.execute_command(&state, domain.command_switch_workspace(1))
 
 	renderer_kind := renderer_kind_from_args()
 	width, height := tty.size_or_default(80, 24)
@@ -56,12 +48,11 @@ main :: proc() {
 		}
 		renderer.resize(&r, new_width, new_height)
 
-		render.render_app(&r.surface, &state, domain.Rect {
-			x = 0,
-			y = 0,
-			width = renderer.width(&r),
-			height = renderer.height(&r),
-		})
+		render.render_app(
+			&r.surface,
+			&state,
+			domain.Rect{x = 0, y = 0, width = renderer.width(&r), height = renderer.height(&r)},
+		)
 		renderer.present(&r)
 
 		action := read_next_action(renderer_kind, config.mod_key, config.bindings)
@@ -71,7 +62,7 @@ main :: proc() {
 
 		switch action.kind {
 		case .None:
-			// Ignore unknown input.
+		// Ignore unknown input.
 		case .Quit:
 			running = false
 		case .Command:
@@ -82,7 +73,11 @@ main :: proc() {
 	}
 }
 
-read_next_action :: proc(renderer_kind: renderer.Kind, mod_key: input.Mod_Key, bindings: input.Key_Bindings) -> input.Action {
+read_next_action :: proc(
+	renderer_kind: renderer.Kind,
+	mod_key: input.Mod_Key,
+	bindings: input.Key_Bindings,
+) -> input.Action {
 	if renderer_kind == .TTY {
 		if !tty.wait(50) {
 			return input.Action{kind = .None}
