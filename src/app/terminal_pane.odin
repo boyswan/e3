@@ -79,6 +79,7 @@ terminal_resize_grid :: proc(term: ^Terminal_Handle, width: int, height: int) {
 	term.height = height
 	term.cursor_x = 0
 	term.cursor_y = 0
+	terminal_reset_escape(term)
 	term.cells = make([]byte, width * height)
 	terminal_clear_grid(term)
 
@@ -180,21 +181,36 @@ terminal_handle_escape_byte :: proc(term: ^Terminal_Handle, value: byte) {
 	switch term.escape {
 	case 1:
 		if value == '[' {
-			term.escape = 2
+			terminal_begin_csi(term)
 			return
 		}
 		if value == ']' {
 			term.escape = 3
 			return
 		}
-		term.escape = 0
-	case 2:
-		if value >= 0x40 && value <= 0x7e {
-			term.escape = 0
+
+		// A few single-byte ESC sequences seen from shells/editors.
+		switch value {
+		case 'c':
+			terminal_clear_grid(term)
+			term.cursor_x = 0
+			term.cursor_y = 0
+		case 'D':
+			terminal_newline(term)
+		case 'E':
+			terminal_newline(term)
+			term.cursor_x = 0
+		case 'M':
+			terminal_reverse_index(term)
+		case '7', '8':
+			// Save/restore cursor are ignored for now.
 		}
+		terminal_reset_escape(term)
+	case 2:
+		terminal_handle_csi_byte(term, value)
 	case 3:
 		if value == 0x07 {
-			term.escape = 0
+			terminal_reset_escape(term)
 			return
 		}
 		if value == 0x1b {
@@ -202,10 +218,254 @@ terminal_handle_escape_byte :: proc(term: ^Terminal_Handle, value: byte) {
 		}
 	case 4:
 		if value == '\\' {
-			term.escape = 0
+			terminal_reset_escape(term)
 		} else {
 			term.escape = 3
 		}
+	}
+}
+
+terminal_begin_csi :: proc(term: ^Terminal_Handle) {
+	term.escape = 2
+	term.escape_param_count = 0
+	term.escape_value = 0
+	term.escape_has_value = false
+	term.escape_private = false
+}
+
+terminal_reset_escape :: proc(term: ^Terminal_Handle) {
+	term.escape = 0
+	term.escape_param_count = 0
+	term.escape_value = 0
+	term.escape_has_value = false
+	term.escape_private = false
+}
+
+terminal_handle_csi_byte :: proc(term: ^Terminal_Handle, value: byte) {
+	if value >= '0' && value <= '9' {
+		term.escape_value = term.escape_value * 10 + int(value - '0')
+		term.escape_has_value = true
+		return
+	}
+
+	if value == ';' || value == ':' {
+		terminal_commit_csi_param(term)
+		return
+	}
+
+	if value == '?' {
+		term.escape_private = true
+		return
+	}
+
+	// Ignore intermediate bytes until the final byte.
+	if value >= 0x20 && value <= 0x2f {
+		return
+	}
+
+	if value >= 0x40 && value <= 0x7e {
+		if term.escape_has_value {
+			terminal_commit_csi_param(term)
+		}
+		terminal_apply_csi(term, value)
+		terminal_reset_escape(term)
+		return
+	}
+
+	terminal_reset_escape(term)
+}
+
+terminal_commit_csi_param :: proc(term: ^Terminal_Handle) {
+	if term.escape_param_count >= len(term.escape_params) {
+		term.escape_value = 0
+		term.escape_has_value = false
+		return
+	}
+
+	if term.escape_has_value {
+		term.escape_params[term.escape_param_count] = term.escape_value
+	} else {
+		term.escape_params[term.escape_param_count] = 0
+	}
+	term.escape_param_count += 1
+	term.escape_value = 0
+	term.escape_has_value = false
+}
+
+terminal_apply_csi :: proc(term: ^Terminal_Handle, final: byte) {
+	switch final {
+	case 'A':
+		terminal_move_cursor(term, 0, -terminal_csi_param(term, 0, 1))
+	case 'B':
+		terminal_move_cursor(term, 0, terminal_csi_param(term, 0, 1))
+	case 'C':
+		terminal_move_cursor(term, terminal_csi_param(term, 0, 1), 0)
+	case 'D':
+		terminal_move_cursor(term, -terminal_csi_param(term, 0, 1), 0)
+	case 'E':
+		terminal_move_cursor(term, 0, terminal_csi_param(term, 0, 1))
+		term.cursor_x = 0
+	case 'F':
+		terminal_move_cursor(term, 0, -terminal_csi_param(term, 0, 1))
+		term.cursor_x = 0
+	case 'G':
+		term.cursor_x = terminal_csi_param(term, 0, 1) - 1
+		terminal_clamp_cursor(term)
+	case 'H', 'f':
+		term.cursor_y = terminal_csi_param(term, 0, 1) - 1
+		term.cursor_x = terminal_csi_param(term, 1, 1) - 1
+		terminal_clamp_cursor(term)
+	case 'J':
+		terminal_clear_screen_mode(term, terminal_csi_param(term, 0, 0))
+	case 'K':
+		terminal_clear_line_mode(term, terminal_csi_param(term, 0, 0))
+	case 'm':
+		// SGR color/style is intentionally ignored in this stepping-stone terminal.
+	case 'h', 'l':
+		// Mode set/reset, including bracketed paste (?2004h/l) and cursor visibility.
+	case 'r':
+		// Scroll region ignored for now.
+	}
+}
+
+terminal_csi_param :: proc(term: ^Terminal_Handle, index: int, default_value: int) -> int {
+	if index < 0 || index >= term.escape_param_count {
+		return default_value
+	}
+
+	value := term.escape_params[index]
+	if value == 0 {
+		return default_value
+	}
+
+	return value
+}
+
+terminal_move_cursor :: proc(term: ^Terminal_Handle, dx: int, dy: int) {
+	term.cursor_x += dx
+	term.cursor_y += dy
+	terminal_clamp_cursor(term)
+}
+
+terminal_clamp_cursor :: proc(term: ^Terminal_Handle) {
+	if term.width <= 0 || term.height <= 0 {
+		term.cursor_x = 0
+		term.cursor_y = 0
+		return
+	}
+
+	if term.cursor_x < 0 {
+		term.cursor_x = 0
+	}
+	if term.cursor_y < 0 {
+		term.cursor_y = 0
+	}
+	if term.cursor_x >= term.width {
+		term.cursor_x = term.width - 1
+	}
+	if term.cursor_y >= term.height {
+		term.cursor_y = term.height - 1
+	}
+}
+
+terminal_clear_screen_mode :: proc(term: ^Terminal_Handle, mode: int) {
+	if term.cells == nil || term.width <= 0 || term.height <= 0 {
+		return
+	}
+
+	switch mode {
+	case 0:
+		terminal_clear_range(term, term.cursor_x, term.cursor_y, term.width - 1, term.height - 1)
+	case 1:
+		terminal_clear_range(term, 0, 0, term.cursor_x, term.cursor_y)
+	case 2, 3:
+		terminal_clear_grid(term)
+	}
+}
+
+terminal_clear_line_mode :: proc(term: ^Terminal_Handle, mode: int) {
+	if term.cells == nil || term.cursor_y < 0 || term.cursor_y >= term.height {
+		return
+	}
+
+	switch mode {
+	case 0:
+		terminal_clear_range(term, term.cursor_x, term.cursor_y, term.width - 1, term.cursor_y)
+	case 1:
+		terminal_clear_range(term, 0, term.cursor_y, term.cursor_x, term.cursor_y)
+	case 2:
+		terminal_clear_range(term, 0, term.cursor_y, term.width - 1, term.cursor_y)
+	}
+}
+
+terminal_clear_range :: proc(term: ^Terminal_Handle, left: int, top: int, right: int, bottom: int) {
+	if term.cells == nil || term.width <= 0 || term.height <= 0 {
+		return
+	}
+
+	clamped_left := left
+	clamped_top := top
+	clamped_right := right
+	clamped_bottom := bottom
+	if clamped_left < 0 {
+		clamped_left = 0
+	}
+	if clamped_top < 0 {
+		clamped_top = 0
+	}
+	if clamped_right >= term.width {
+		clamped_right = term.width - 1
+	}
+	if clamped_bottom >= term.height {
+		clamped_bottom = term.height - 1
+	}
+	if clamped_left > clamped_right || clamped_top > clamped_bottom {
+		return
+	}
+
+	for y in clamped_top ..= clamped_bottom {
+		start_x := clamped_left
+		end_x := clamped_right
+		if y == clamped_top {
+			start_x = clamped_left
+		} else {
+			start_x = 0
+		}
+		if y == clamped_bottom {
+			end_x = clamped_right
+		} else {
+			end_x = term.width - 1
+		}
+
+		for x in start_x ..= end_x {
+			term.cells[y * term.width + x] = ' '
+		}
+	}
+}
+
+terminal_reverse_index :: proc(term: ^Terminal_Handle) {
+	term.cursor_y -= 1
+	if term.cursor_y >= 0 {
+		return
+	}
+
+	term.cursor_y = 0
+	terminal_scroll_down(term)
+}
+
+terminal_scroll_down :: proc(term: ^Terminal_Handle) {
+	if term.width <= 0 || term.height <= 0 {
+		return
+	}
+
+	for y := term.height - 1; y > 0; y -= 1 {
+		for x in 0 ..< term.width {
+			term.cells[y * term.width + x] = term.cells[(y - 1) * term.width + x]
+		}
+	}
+
+	for x in 0 ..< term.width {
+		term.cells[x] = ' '
 	}
 }
 

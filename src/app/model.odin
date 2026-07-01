@@ -8,8 +8,13 @@ Terminal_Handle :: struct {
 	height:   int,
 	cursor_x: int,
 	cursor_y: int,
-	cells:    []byte,
-	escape:   int,
+	cells:              []byte,
+	escape:             int,
+	escape_params:      [16]int,
+	escape_param_count: int,
+	escape_value:       int,
+	escape_has_value:   bool,
+	escape_private:     bool,
 }
 
 Rect :: struct {

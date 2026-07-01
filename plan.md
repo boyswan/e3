@@ -196,6 +196,7 @@ Later features:
 - SDL3/native rendering is now the default; pass `--tty` or `--terminal` to use the terminal renderer.
 - SDL3 mode now uses native SDL keyboard/text/window events instead of terminal stdin/raw mode: Alt keybindings map to existing mux commands, text and special keys route to the focused PTY, and window close quits.
 - Improved SDL3 presentation: larger native cells/text and vector-drawn 1px separator/border lines instead of relying on tiny debug-text box-drawing glyphs.
+- Improved the stepping-stone PTY terminal parser with basic CSI handling: cursor movement/positioning, clear screen/line, SGR/mode ignore, OSC skipping, bracketed paste mode ignore, and reverse index.
 - ANSI escape handling is isolated in the TTY backend instead of being scattered through render code.
 - Renderer draws one outer frame, shared no-margin split separators, a colored focused-pane border, and a bottom workspace bar without a label.
 - Focused pane insert hint is inactive until split mode is entered; active split-right colors the focused pane's right edge and active split-down colors its bottom edge.
