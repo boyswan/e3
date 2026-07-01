@@ -23,6 +23,13 @@ Node_Kind :: enum {
 	Tabbed,
 }
 
+Direction :: enum {
+	Left,
+	Right,
+	Up,
+	Down,
+}
+
 Node :: struct {
 	kind:   Node_Kind,
 	parent: ^Node,

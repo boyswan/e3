@@ -47,16 +47,26 @@ make_container_node :: proc(kind: Node_Kind) -> ^Node {
 	return node
 }
 
-make_workspace :: proc(app: ^App, id: int) -> Workspace {
-	pane := make_pane(app)
-	root := make_pane_node(pane)
-
+make_workspace :: proc(id: int) -> Workspace {
 	return Workspace {
 		id = id,
 		name = workspace_name(id),
-		root = root,
-		focused_pane_id = pane.id,
 	}
+}
+
+ensure_workspace_pane :: proc(app: ^App, workspace: ^Workspace) -> bool {
+	if workspace == nil {
+		return false
+	}
+
+	if workspace.root != nil {
+		return true
+	}
+
+	pane := make_pane(app)
+	workspace.root = make_pane_node(pane)
+	workspace.focused_pane_id = pane.id
+	return true
 }
 
 init_app :: proc(app: ^App) {
@@ -65,7 +75,7 @@ init_app :: proc(app: ^App) {
 	app.next_pane_id = 1
 
 	for id in 1 ..= 9 {
-		workspace := make_workspace(app, id)
+		workspace := make_workspace(id)
 		append(&app.workspaces, workspace)
 	}
 }
@@ -82,7 +92,7 @@ switch_workspace :: proc(app: ^App, id: int) -> bool {
 	for index in 0 ..< len(app.workspaces) {
 		if app.workspaces[index].id == id {
 			app.active_workspace_index = index
-			return true
+			return ensure_workspace_pane(app, &app.workspaces[index])
 		}
 	}
 
