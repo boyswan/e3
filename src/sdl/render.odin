@@ -33,6 +33,13 @@ State :: struct {
 	cell_width:      int,
 	cell_height:     int,
 	text_scale:      f32,
+
+	selecting:       bool,
+	selection_valid: bool,
+	selection_start_x: int,
+	selection_start_y: int,
+	selection_end_x:   int,
+	selection_end_y:   int,
 }
 
 make_state :: proc() -> State {
@@ -156,11 +163,60 @@ present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Re
 	for y in 0 ..< surface.height {
 		for x in 0 ..< surface.width {
 			cell := surface.cells[y * surface.width + x]
+			if selection_contains(state, x, y) {
+				apply_selection_style(state, surface, &cell)
+			}
 			draw_cell(state, surface, x, y, cell)
 		}
 	}
 
 	sdl3.RenderPresent(state.renderer)
+}
+
+selection_contains :: proc(state: ^State, x: int, y: int) -> bool {
+	if !state.selection_valid {
+		return false
+	}
+
+	start_x, start_y, end_x, end_y := normalized_selection(state)
+	if y < start_y || y > end_y {
+		return false
+	}
+	if start_y == end_y {
+		return x >= start_x && x <= end_x
+	}
+	if y == start_y {
+		return x >= start_x
+	}
+	if y == end_y {
+		return x <= end_x
+	}
+	return true
+}
+
+normalized_selection :: proc(state: ^State) -> (int, int, int, int) {
+	start_x := state.selection_start_x
+	start_y := state.selection_start_y
+	end_x := state.selection_end_x
+	end_y := state.selection_end_y
+
+	if start_y > end_y || (start_y == end_y && start_x > end_x) {
+		return end_x, end_y, start_x, start_y
+	}
+	return start_x, start_y, end_x, end_y
+}
+
+apply_selection_style :: proc(state: ^State, surface: ^render.Screen_Buffer, cell: ^render.Cell) {
+	bg := surface.palette[4]
+	fg := surface.palette[0]
+	cell.fg_set = true
+	cell.fg_r = fg.r
+	cell.fg_g = fg.g
+	cell.fg_b = fg.b
+	cell.bg_set = true
+	cell.bg_r = bg.r
+	cell.bg_g = bg.g
+	cell.bg_b = bg.b
 }
 
 draw_cell :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y: int, cell: render.Cell) {

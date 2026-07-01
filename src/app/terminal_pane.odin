@@ -183,8 +183,21 @@ terminal_write_input :: proc(term: ^Terminal_Handle, data: []byte) -> bool {
 		return false
 	}
 
-	written := posix.write(posix.FD(term.pty_fd), raw_data(data), c.size_t(len(data)))
-	return written > 0
+	total_written := 0
+	for total_written < len(data) {
+		remaining := data[total_written:]
+		written := posix.write(
+			posix.FD(term.pty_fd),
+			raw_data(remaining),
+			c.size_t(len(remaining)),
+		)
+		if written <= 0 {
+			break
+		}
+		total_written += int(written)
+	}
+
+	return total_written > 0
 }
 
 terminal_write_output :: proc(term: ^Terminal_Handle, data: []byte) {

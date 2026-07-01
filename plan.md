@@ -203,7 +203,7 @@ Later features:
 - Improved libvterm rendering fidelity: cells now preserve UTF-32 codepoints and encode them to UTF-8 at presentation time instead of replacing unknown glyphs with `?`; the focused pane cursor is drawn by inverting the libvterm cursor cell; libvterm state/screen default fg/bg colors are aligned to the renderer background, and the previous “explicit RGB black means default background” workaround was removed.
 - Replaced SDL debug text with SDL3_ttf for native mode. SDL now resolves system fonts through Fontconfig or an explicit font path; no fonts are bundled.
 - Added a basic persistent YAML-style config (`config.yaml`, also searches `odin-play.yaml` and XDG config paths) for native font, window foreground/background, terminal palette, SDL modifier key settings, and SDL keybindings instead of relying on environment variables.
-- Tidied render backend structure: `src/renderer` now owns the small backend-agnostic renderer façade, SDL-specific state/rendering/font/cache/input code lives in `src/sdl`, and TTY output/input/mode/size code lives in `src/tty`.
+- Tidied render backend structure: `src/renderer` now owns the small backend-agnostic renderer façade, SDL-specific state/rendering/font/cache/input/selection/clipboard code lives in `src/sdl`, and TTY output/input/mode/size code lives in `src/tty`.
 - ANSI escape handling is isolated in the TTY backend instead of being scattered through render code.
 - Renderer draws one outer frame, shared no-margin split separators, a colored focused-pane border, and a bottom workspace bar without a label.
 - Focused pane insert hint is inactive until split mode is entered; active split-right colors the focused pane's right edge and active split-down colors its bottom edge.

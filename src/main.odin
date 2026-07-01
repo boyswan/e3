@@ -55,7 +55,7 @@ main :: proc() {
 		)
 		renderer.present(&r)
 
-		action := read_next_action(renderer_kind, config.mod_key, config.bindings)
+		action := read_next_action(&r, config.mod_key, config.bindings)
 		if action.kind == .None {
 			continue
 		}
@@ -69,23 +69,31 @@ main :: proc() {
 			domain.execute_command(&state, action.command)
 		case .Pane_Input:
 			domain.write_focused_terminal(&state, action.input_data[:action.input_len])
+		case .Paste_Clipboard:
+			if renderer_kind == .SDL3 {
+				paste := native.clipboard_text()
+				if paste != nil {
+					domain.write_focused_terminal(&state, paste)
+					delete(paste)
+				}
+			}
 		}
 	}
 }
 
 read_next_action :: proc(
-	renderer_kind: renderer.Kind,
+	r: ^renderer.Renderer,
 	mod_key: input.Mod_Key,
 	bindings: input.Key_Bindings,
 ) -> input.Action {
-	if renderer_kind == .TTY {
+	if r.kind == .TTY {
 		if !tty.wait(50) {
 			return input.Action{kind = .None}
 		}
 		return tty.read_input_action()
 	}
 
-	action := native.read_input_action(mod_key, bindings)
+	action := native.read_input_action(&r.sdl, &r.surface, mod_key, bindings)
 	if action.kind == .None {
 		native.wait(16)
 	}

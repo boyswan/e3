@@ -2,19 +2,26 @@ package sdl
 
 import domain "../app"
 import input "../input"
+import render "../render"
 import sdl3 "vendor:sdl3"
 
-read_input_action :: proc(mod_key: input.Mod_Key, bindings: input.Key_Bindings) -> input.Action {
+read_input_action :: proc(state: ^State, surface: ^render.Screen_Buffer, mod_key: input.Mod_Key, bindings: input.Key_Bindings) -> input.Action {
 	event: sdl3.Event
 	for sdl3.PollEvent(&event) {
 		#partial switch event.type {
 		case .QUIT, .WINDOW_CLOSE_REQUESTED:
 			return input.Action{kind = .Quit}
 		case .KEY_DOWN:
-			action := key_action(event.key, mod_key, bindings)
+			action := key_action(state, surface, event.key, mod_key, bindings)
 			if action.kind != .None {
 				return action
 			}
+		case .MOUSE_BUTTON_DOWN:
+			handle_mouse_button_down(state, surface, event.button)
+		case .MOUSE_MOTION:
+			handle_mouse_motion(state, surface, event.motion)
+		case .MOUSE_BUTTON_UP:
+			handle_mouse_button_up(state, surface, event.button)
 		case .TEXT_INPUT:
 			action := cstring_input_action(event.text.text)
 			if action.kind != .None {
@@ -26,13 +33,39 @@ read_input_action :: proc(mod_key: input.Mod_Key, bindings: input.Key_Bindings) 
 	return input.Action{kind = .None}
 }
 
+clipboard_text :: proc() -> []byte {
+	text := sdl3.GetClipboardText()
+	if text == nil {
+		return nil
+	}
+	defer sdl3.free(rawptr(text))
+
+	result := make([dynamic]byte)
+	index := 0
+	for text[index] != 0 {
+		append(&result, byte(text[index]))
+		index += 1
+	}
+
+	return result[:]
+}
+
 wait :: proc(timeout_ms: int) {
 	sdl3.Delay(u32(timeout_ms))
 }
 
-key_action :: proc(event: sdl3.KeyboardEvent, mod_key: input.Mod_Key, bindings: input.Key_Bindings) -> input.Action {
+key_action :: proc(state: ^State, surface: ^render.Screen_Buffer, event: sdl3.KeyboardEvent, mod_key: input.Mod_Key, bindings: input.Key_Bindings) -> input.Action {
 	ctrl := event.mod & sdl3.KMOD_CTRL != {}
 	shift := event.mod & sdl3.KMOD_SHIFT != {}
+	gui := event.mod & sdl3.KMOD_GUI != {}
+
+	if (gui && event.key == sdl3.K_C) || (ctrl && shift && event.key == sdl3.K_C) || event.key == sdl3.K_COPY {
+		copy_selection_to_clipboard(state, surface)
+		return input.Action{kind = .None}
+	}
+	if (gui && event.key == sdl3.K_V) || (ctrl && shift && event.key == sdl3.K_V) || event.key == sdl3.K_PASTE {
+		return input.Action{kind = .Paste_Clipboard}
+	}
 
 	if mod_key_pressed(event.mod, mod_key) {
 		return mod_key_action(event.key, shift, bindings)
@@ -250,4 +283,131 @@ cstring_input_action :: proc(text: cstring) -> input.Action {
 	}
 
 	return action
+}
+
+handle_mouse_button_down :: proc(state: ^State, surface: ^render.Screen_Buffer, event: sdl3.MouseButtonEvent) {
+	if event.button != sdl3.BUTTON_LEFT {
+		return
+	}
+
+	x, y, ok := mouse_cell_position(state, surface, event.x, event.y)
+	if !ok {
+		state.selecting = false
+		state.selection_valid = false
+		return
+	}
+
+	state.selecting = true
+	state.selection_valid = false
+	state.selection_start_x = x
+	state.selection_start_y = y
+	state.selection_end_x = x
+	state.selection_end_y = y
+}
+
+handle_mouse_motion :: proc(state: ^State, surface: ^render.Screen_Buffer, event: sdl3.MouseMotionEvent) {
+	if !state.selecting || event.state & sdl3.BUTTON_LMASK == {} {
+		return
+	}
+
+	x, y, ok := mouse_cell_position(state, surface, event.x, event.y)
+	if !ok {
+		return
+	}
+
+	state.selection_end_x = x
+	state.selection_end_y = y
+	state.selection_valid = x != state.selection_start_x || y != state.selection_start_y
+}
+
+handle_mouse_button_up :: proc(state: ^State, surface: ^render.Screen_Buffer, event: sdl3.MouseButtonEvent) {
+	if event.button != sdl3.BUTTON_LEFT || !state.selecting {
+		return
+	}
+
+	state.selecting = false
+	x, y, ok := mouse_cell_position(state, surface, event.x, event.y)
+	if ok {
+		state.selection_end_x = x
+		state.selection_end_y = y
+	}
+
+	state.selection_valid = state.selection_end_x != state.selection_start_x || state.selection_end_y != state.selection_start_y
+	if state.selection_valid {
+		copy_selection_to_clipboard(state, surface)
+	}
+}
+
+mouse_cell_position :: proc(state: ^State, surface: ^render.Screen_Buffer, mouse_x: f32, mouse_y: f32) -> (int, int, bool) {
+	if state.cell_width <= 0 || state.cell_height <= 0 || surface.width <= 0 || surface.height <= 0 {
+		return 0, 0, false
+	}
+
+	x := int(mouse_x) / state.cell_width
+	y := int(mouse_y) / state.cell_height
+	if x < 0 { x = 0 }
+	if y < 0 { y = 0 }
+	if x >= surface.width { x = surface.width - 1 }
+	if y >= surface.height { y = surface.height - 1 }
+	return x, y, true
+}
+
+copy_selection_to_clipboard :: proc(state: ^State, surface: ^render.Screen_Buffer) {
+	start_x, start_y, end_x, end_y := normalized_selection(state)
+	bytes := make([dynamic]byte)
+	defer delete(bytes)
+
+	for y in start_y ..= end_y {
+		row_start := 0
+		row_end := surface.width - 1
+		if y == start_y {
+			row_start = start_x
+		}
+		if y == end_y {
+			row_end = end_x
+		}
+
+		for row_end >= row_start && selection_cell_is_blank(surface.cells[y * surface.width + row_end]) {
+			row_end -= 1
+		}
+
+		for x in row_start ..= row_end {
+			append_selection_cell_text(&bytes, surface.cells[y * surface.width + x])
+		}
+		if y != end_y {
+			append(&bytes, '\n')
+		}
+	}
+
+	if len(bytes) == 0 {
+		return
+	}
+
+	append(&bytes, 0)
+	_ = sdl3.SetClipboardText(cstring(raw_data(bytes[:])))
+	_ = sdl3.SetPrimarySelectionText(cstring(raw_data(bytes[:])))
+}
+
+selection_cell_is_blank :: proc(cell: render.Cell) -> bool {
+	return cell.rune == 0 && cell.glyph == " " && cell.line_mask == 0
+}
+
+append_selection_cell_text :: proc(bytes: ^[dynamic]byte, cell: render.Cell) {
+	if cell.rune != 0 {
+		buf: [4]u8
+		count := encode_utf8(cell.rune, buf[:])
+		for index in 0 ..< count {
+			append(bytes, buf[index])
+		}
+		return
+	}
+
+	if cell.glyph == "" {
+		append(bytes, ' ')
+		return
+	}
+
+	for index in 0 ..< len(cell.glyph) {
+		append(bytes, cell.glyph[index])
+	}
 }

@@ -58,6 +58,7 @@ Action_Kind :: enum {
 	Quit,
 	Command,
 	Pane_Input,
+	Paste_Clipboard,
 }
 
 Action :: struct {
