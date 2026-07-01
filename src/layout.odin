@@ -192,6 +192,94 @@ insert_child_after :: proc(parent: ^Node, existing: ^Node, child: ^Node) -> bool
 	return true
 }
 
+apply_split_context :: proc(app: ^App, kind: Node_Kind) -> bool {
+	workspace := active_workspace(app)
+	if !ensure_workspace_pane(app, workspace) {
+		return false
+	}
+
+	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+	if focused == nil || focused.kind != .Pane || focused.pane == nil {
+		return false
+	}
+
+	focused.pane.split_kind = kind
+	focused.pane.split_active = true
+
+	parent := focused.parent
+	if parent == nil {
+		container := make_container_node(kind)
+		container.parent = nil
+		focused.parent = container
+		append(&container.children, focused)
+		append(&container.weights, 1.0)
+		container.focused_child_index = 0
+		workspace.root = container
+		return focus_node(workspace, focused)
+	}
+
+	if is_split_kind(parent.kind) && len(parent.children) == 1 {
+		parent.kind = kind
+		return focus_node(workspace, focused)
+	}
+
+	container := make_container_node(kind)
+	container.parent = parent
+	container.focused_child_index = 0
+
+	index := find_child_index(parent, focused)
+	if index < 0 {
+		return false
+	}
+
+	parent.children[index] = container
+	focused.parent = container
+	append(&container.children, focused)
+	append(&container.weights, 1.0)
+	parent.focused_child_index = index
+
+	return focus_node(workspace, focused)
+}
+
+open_pane :: proc(app: ^App) -> bool {
+	workspace := active_workspace(app)
+	if workspace == nil {
+		return false
+	}
+
+	if workspace.root == nil {
+		return ensure_workspace_pane(app, workspace)
+	}
+
+	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+	if focused == nil || focused.kind != .Pane || focused.pane == nil || !focused.pane.split_active {
+		return false
+	}
+
+	parent := focused.parent
+	if parent == nil {
+		if !apply_split_context(app, focused.pane.split_kind) {
+			return false
+		}
+
+		focused = find_focused_node(workspace.root, workspace.focused_pane_id)
+		if focused == nil || focused.pane == nil {
+			return false
+		}
+		parent = focused.parent
+	}
+
+	new_pane := make_pane(app)
+	new_node := make_pane_node(new_pane)
+	focused.pane.split_active = false
+	if !insert_child_after(parent, focused, new_node) {
+		return false
+	}
+
+	cleanup_workspace(workspace)
+	return focus_pane(workspace, new_pane)
+}
+
 split_focused_pane :: proc(app: ^App, horizontal: bool) -> bool {
 	workspace := active_workspace(app)
 	if !ensure_workspace_pane(app, workspace) {
@@ -369,8 +457,7 @@ cleanup_node :: proc(node: ^Node) -> ^Node {
 	}
 
 	if is_split_kind(node.kind) {
-		merge_same_kind_children(node)
-		if len(node.children) == 1 {
+		if len(node.children) == 1 && !node_has_active_split_context(node) {
 			child := node.children[0]
 			child.parent = node.parent
 			return child
@@ -383,6 +470,11 @@ cleanup_node :: proc(node: ^Node) -> ^Node {
 
 is_split_kind :: proc(kind: Node_Kind) -> bool {
 	return kind == .Split_Horizontal || kind == .Split_Vertical
+}
+
+node_has_active_split_context :: proc(node: ^Node) -> bool {
+	focused := descend_focused(node)
+	return focused != nil && focused.pane != nil && focused.pane.split_active
 }
 
 merge_same_kind_children :: proc(node: ^Node) {

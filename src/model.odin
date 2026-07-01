@@ -10,9 +10,11 @@ Rect :: struct {
 }
 
 Pane :: struct {
-	id:       int,
-	terminal: Terminal_Handle,
-	bounds:   Rect,
+	id:           int,
+	terminal:     Terminal_Handle,
+	bounds:       Rect,
+	split_kind:   Node_Kind,
+	split_active: bool,
 }
 
 Node_Kind :: enum {

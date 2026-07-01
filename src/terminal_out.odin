@@ -75,5 +75,7 @@ terminal_set_style :: proc(bold: bool, color: Cell_Color) {
 		// Default foreground.
 	case .Focused:
 		fmt.print("\x1b[36m")
+	case .Split_Hint:
+		fmt.print("\x1b[35m")
 	}
 }

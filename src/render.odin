@@ -18,7 +18,7 @@ render_app :: proc(buffer: ^Screen_Buffer, app: ^App, bounds: Rect) {
 	layout_workspace(workspace, content_bounds)
 	render_split_separators(buffer, workspace.root)
 	screen_draw_box(buffer, content_bounds)
-	render_focused_pane_border(buffer, workspace, content_bounds)
+	render_focused_pane_border(buffer, app, workspace, content_bounds)
 	render_pane_labels(buffer, workspace.root, workspace.focused_pane_id)
 	render_workspace_bar(buffer, app, Rect{x = bounds.x, y = bounds.y + bounds.height - 1, width = bounds.width, height = 1})
 }
@@ -36,6 +36,16 @@ render_workspace_bar :: proc(buffer: ^Screen_Buffer, app: ^App, bounds: Rect) {
 			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " ")
 			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, workspace.name)
 			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, "  ")
+		}
+	}
+
+	split_kind, has_split_kind := focused_insertion_kind(app)
+	if has_split_kind {
+		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " split:")
+		if split_kind == .Split_Horizontal {
+			screen_put_text(buffer, cursor_x, bounds.y, "right", true, .Split_Hint)
+		} else {
+			screen_put_text(buffer, cursor_x, bounds.y, "down", true, .Split_Hint)
 		}
 	}
 }
@@ -145,7 +155,7 @@ render_pane_label :: proc(buffer: ^Screen_Buffer, pane: ^Pane, focused: bool) {
 	screen_put_int(buffer, cursor_x, bounds.y + 1, pane.id)
 }
 
-render_focused_pane_border :: proc(buffer: ^Screen_Buffer, workspace: ^Workspace, content_bounds: Rect) {
+render_focused_pane_border :: proc(buffer: ^Screen_Buffer, app: ^App, workspace: ^Workspace, content_bounds: Rect) {
 	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
 	if focused == nil || focused.pane == nil {
 		return
@@ -173,6 +183,40 @@ render_focused_pane_border :: proc(buffer: ^Screen_Buffer, workspace: ^Workspace
 		screen_set_color(buffer, left, y, .Focused)
 		screen_set_color(buffer, right, y, .Focused)
 	}
+
+	split_kind, has_split_kind := focused_node_insertion_kind(focused)
+	if !has_split_kind {
+		return
+	}
+
+	if split_kind == .Split_Vertical {
+		for x in left ..= right {
+			screen_set_color(buffer, x, bottom, .Split_Hint)
+		}
+		return
+	}
+
+	for y in top ..= bottom {
+		screen_set_color(buffer, right, y, .Split_Hint)
+	}
+}
+
+focused_insertion_kind :: proc(app: ^App) -> (Node_Kind, bool) {
+	workspace := active_workspace(app)
+	if workspace == nil {
+		return .Pane, false
+	}
+
+	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+	return focused_node_insertion_kind(focused)
+}
+
+focused_node_insertion_kind :: proc(focused: ^Node) -> (Node_Kind, bool) {
+	if focused == nil || focused.pane == nil || !focused.pane.split_active {
+		return .Pane, false
+	}
+
+	return focused.pane.split_kind, true
 }
 
 node_bounds :: proc(node: ^Node) -> (Rect, bool) {

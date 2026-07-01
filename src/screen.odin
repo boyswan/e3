@@ -8,6 +8,7 @@ LINE_RIGHT :: u8(1 << 3)
 Cell_Color :: enum {
 	Default,
 	Focused,
+	Split_Hint,
 }
 
 Cell :: struct {

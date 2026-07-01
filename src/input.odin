@@ -15,20 +15,49 @@ Input_Action :: struct {
 }
 
 read_input_action :: proc() -> Input_Action {
-	buffer: [1]byte
-	count := posix.read(posix.FD(0), raw_data(buffer[:]), c.size_t(len(buffer)))
-	if count <= 0 {
+	key, ok := read_input_byte()
+	if !ok {
 		return Input_Action{kind = .None}
 	}
 
-	key := buffer[0]
+	// Keep raw q as an emergency/dev quit key.
+	if key == 'q' {
+		return Input_Action{kind = .Quit}
+	}
+
+	// Option/Alt is represented by most terminals as ESC followed by the key.
+	if key == 0x1b {
+		modified_key, modified_ok := read_input_byte()
+		if !modified_ok {
+			return Input_Action{kind = .None}
+		}
+
+		return action_from_modified_key(modified_key)
+	}
+
+	return Input_Action{kind = .None}
+}
+
+read_input_byte :: proc() -> (byte, bool) {
+	buffer: [1]byte
+	count := posix.read(posix.FD(0), raw_data(buffer[:]), c.size_t(len(buffer)))
+	if count <= 0 {
+		return 0, false
+	}
+
+	return buffer[0], true
+}
+
+action_from_modified_key :: proc(key: byte) -> Input_Action {
 	switch key {
 	case 'q':
 		return Input_Action{kind = .Quit}
-	case 's':
-		return Input_Action{kind = .Command, command = command_split_horizontal()}
-	case 'v':
-		return Input_Action{kind = .Command, command = command_split_vertical()}
+	case 'd':
+		return Input_Action{kind = .Command, command = command_set_split_right()}
+	case 'D':
+		return Input_Action{kind = .Command, command = command_set_split_down()}
+	case '\r', '\n':
+		return Input_Action{kind = .Command, command = command_open_pane()}
 	case 'w':
 		return Input_Action{kind = .Command, command = command_close_pane()}
 	case 'h':

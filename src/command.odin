@@ -1,8 +1,9 @@
 package app
 
 Command_Kind :: enum {
-	Split_Horizontal,
-	Split_Vertical,
+	Set_Split_Right,
+	Set_Split_Down,
+	Open_Pane,
 	Switch_Workspace,
 	Focus,
 	Close_Pane,
@@ -14,12 +15,16 @@ Command :: struct {
 	direction:    Direction,
 }
 
-command_split_horizontal :: proc() -> Command {
-	return Command{kind = .Split_Horizontal}
+command_set_split_right :: proc() -> Command {
+	return Command{kind = .Set_Split_Right}
 }
 
-command_split_vertical :: proc() -> Command {
-	return Command{kind = .Split_Vertical}
+command_set_split_down :: proc() -> Command {
+	return Command{kind = .Set_Split_Down}
+}
+
+command_open_pane :: proc() -> Command {
+	return Command{kind = .Open_Pane}
 }
 
 command_switch_workspace :: proc(id: int) -> Command {
@@ -36,10 +41,12 @@ command_close_pane :: proc() -> Command {
 
 execute_command :: proc(app: ^App, command: Command) -> bool {
 	switch command.kind {
-	case .Split_Horizontal:
-		return split_focused_pane(app, true)
-	case .Split_Vertical:
-		return split_focused_pane(app, false)
+	case .Set_Split_Right:
+		return apply_split_context(app, .Split_Horizontal)
+	case .Set_Split_Down:
+		return apply_split_context(app, .Split_Vertical)
+	case .Open_Pane:
+		return open_pane(app)
 	case .Switch_Workspace:
 		return switch_workspace(app, command.workspace_id)
 	case .Focus:

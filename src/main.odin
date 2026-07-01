@@ -4,10 +4,13 @@ main :: proc() {
 	app: App
 	init_app(&app)
 
-	execute_command(&app, command_split_horizontal())
-	execute_command(&app, command_split_vertical())
+	execute_command(&app, command_set_split_right())
+	execute_command(&app, command_open_pane())
+	execute_command(&app, command_set_split_down())
+	execute_command(&app, command_open_pane())
 	execute_command(&app, command_switch_workspace(2))
-	execute_command(&app, command_split_vertical())
+	execute_command(&app, command_set_split_down())
+	execute_command(&app, command_open_pane())
 	execute_command(&app, command_switch_workspace(1))
 
 	width, height := terminal_size_or_default(80, 24)
