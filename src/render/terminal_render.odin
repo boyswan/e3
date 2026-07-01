@@ -1,9 +1,16 @@
 package render
 
+import "core:c"
 import app "../app"
+import vt "../terminal"
 
-render_terminal_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane) {
+render_terminal_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focused := false) {
 	term := &pane.terminal
+	if term.backend == .Libvterm {
+		render_libvterm_contents(buffer, pane, focused)
+		return
+	}
+
 	if !term.active || term.cells == nil {
 		return
 	}
@@ -20,6 +27,112 @@ render_terminal_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane) {
 			screen_put(buffer, start_x + x, start_y + y, terminal_glyph(value))
 		}
 	}
+}
+
+render_libvterm_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focused: bool) {
+	term := &pane.terminal
+	if !term.active || term.vterm_screen == nil {
+		return
+	}
+
+	bounds := pane.bounds
+	start_x := bounds.x + 1
+	start_y := bounds.y + 1
+	max_width := terminal_min_int(term.width, terminal_max_int(bounds.width - 2, 0))
+	max_height := terminal_min_int(term.height, terminal_max_int(bounds.height - 2, 0))
+
+	cursor := vt.VTermPos{row = -1, col = -1}
+	if focused && term.vterm_state != nil {
+		vt.get_cursorpos(term.vterm_state, &cursor)
+	}
+
+	for y in 0 ..< max_height {
+		for x in 0 ..< max_width {
+			cell: vt.VTermScreenCell
+			ok := vt.get_cell(term.vterm_screen, vt.VTermPos{row = c.int(y), col = c.int(x)}, &cell)
+			if ok == 0 {
+				continue
+			}
+
+			glyph := terminal_vterm_glyph(cell.chars[0])
+			bold := vt.cell_is_bold(&cell)
+			fg := cell.fg
+			bg := cell.bg
+			emit_defaults := false
+			if vt.cell_is_reverse(&cell) || (cursor.row == c.int(y) && cursor.col == c.int(x)) {
+				fg, bg = bg, fg
+				emit_defaults = true
+			}
+			fg_set, fg_r, fg_g, fg_b := terminal_vterm_foreground_color(buffer, term.vterm_screen, &fg, emit_defaults)
+			bg_set, bg_r, bg_g, bg_b := terminal_vterm_background_color(buffer, term.vterm_screen, &bg, emit_defaults)
+			screen_put_terminal_rune(
+				buffer,
+				start_x + x,
+				start_y + y,
+				glyph,
+				bold,
+				fg_set,
+				fg_r,
+				fg_g,
+				fg_b,
+				bg_set,
+				bg_r,
+				bg_g,
+				bg_b,
+			)
+		}
+	}
+}
+
+terminal_vterm_foreground_color :: proc(buffer: ^Screen_Buffer, screen: ^vt.VTermScreen, color: ^vt.VTermColor, emit_default: bool) -> (bool, u8, u8, u8) {
+	if vt.color_is_default_fg(color) {
+		if emit_default {
+			return true, 220, 220, 220
+		}
+		return false, 0, 0, 0
+	}
+	if vt.color_is_default_bg(color) {
+		if emit_default {
+			return true, buffer.background_r, buffer.background_g, buffer.background_b
+		}
+		return false, 0, 0, 0
+	}
+
+	converted := color^
+	vt.convert_color_to_rgb(screen, &converted)
+	return true, converted.red, converted.green, converted.blue
+}
+
+terminal_vterm_background_color :: proc(buffer: ^Screen_Buffer, screen: ^vt.VTermScreen, color: ^vt.VTermColor, emit_default: bool) -> (bool, u8, u8, u8) {
+	if vt.color_is_default_bg(color) {
+		if emit_default {
+			return true, buffer.background_r, buffer.background_g, buffer.background_b
+		}
+		return false, 0, 0, 0
+	}
+	if vt.color_is_default_fg(color) {
+		if emit_default {
+			return true, 220, 220, 220
+		}
+		return false, 0, 0, 0
+	}
+
+	converted := color^
+	vt.convert_color_to_rgb(screen, &converted)
+	// Some shells/apps or libvterm defaults can materialize the default
+	// background as explicit black. Treat that as transparent/default unless
+	// this cell is being materialized for reverse video/cursor rendering.
+	if !emit_default && converted.red == 0 && converted.green == 0 && converted.blue == 0 {
+		return false, 0, 0, 0
+	}
+	return true, converted.red, converted.green, converted.blue
+}
+
+terminal_vterm_glyph :: proc(value: u32) -> u32 {
+	if value == 0 {
+		return ' '
+	}
+	return value
 }
 
 terminal_min_int :: proc(a: int, b: int) -> int {

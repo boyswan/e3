@@ -1,4 +1,4 @@
-package platform
+package tty
 
 import "core:c"
 
@@ -10,31 +10,31 @@ foreign libc {
 
 TIOCGWINSZ :: c.ulong(0x5413)
 
-Terminal_Winsize :: struct {
+Winsize :: struct {
 	row:    u16,
 	col:    u16,
 	xpixel: u16,
 	ypixel: u16,
 }
 
-terminal_size :: proc() -> (int, int, bool) {
-	if width, height, ok := terminal_size_from_fd(1); ok {
+size :: proc() -> (int, int, bool) {
+	if width, height, ok := size_from_fd(1); ok {
 		return width, height, true
 	}
 
-	if width, height, ok := terminal_size_from_fd(0); ok {
+	if width, height, ok := size_from_fd(0); ok {
 		return width, height, true
 	}
 
-	if width, height, ok := terminal_size_from_fd(2); ok {
+	if width, height, ok := size_from_fd(2); ok {
 		return width, height, true
 	}
 
 	return 0, 0, false
 }
 
-terminal_size_from_fd :: proc(fd: c.int) -> (int, int, bool) {
-	winsize: Terminal_Winsize
+size_from_fd :: proc(fd: c.int) -> (int, int, bool) {
+	winsize: Winsize
 	result := ioctl(fd, TIOCGWINSZ, &winsize)
 	if result != 0 || winsize.col == 0 || winsize.row == 0 {
 		return 0, 0, false
@@ -43,8 +43,8 @@ terminal_size_from_fd :: proc(fd: c.int) -> (int, int, bool) {
 	return int(winsize.col), int(winsize.row), true
 }
 
-terminal_size_or_default :: proc(default_width: int, default_height: int) -> (int, int) {
-	if width, height, ok := terminal_size(); ok {
+size_or_default :: proc(default_width: int, default_height: int) -> (int, int) {
+	if width, height, ok := size(); ok {
 		return width, height
 	}
 

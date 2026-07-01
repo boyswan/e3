@@ -15,15 +15,29 @@ Cell_Color :: enum {
 
 Cell :: struct {
 	glyph:     string,
+	rune:      u32,
 	bold:      bool,
 	color:     Cell_Color,
 	line_mask: u8,
+
+	fg_set: bool,
+	fg_r:   u8,
+	fg_g:   u8,
+	fg_b:   u8,
+	bg_set: bool,
+	bg_r:   u8,
+	bg_g:   u8,
+	bg_b:   u8,
 }
 
 Screen_Buffer :: struct {
 	width:  int,
 	height: int,
 	cells:  []Cell,
+
+	background_r: u8,
+	background_g: u8,
+	background_b: u8,
 }
 
 make_screen_buffer :: proc(width: int, height: int) -> Screen_Buffer {
@@ -31,6 +45,9 @@ make_screen_buffer :: proc(width: int, height: int) -> Screen_Buffer {
 		width = width,
 		height = height,
 		cells = make([]Cell, width * height),
+		background_r = 10,
+		background_g = 10,
+		background_b = 12,
 	}
 
 	screen_clear(&buffer)
@@ -44,6 +61,12 @@ destroy_screen_buffer :: proc(buffer: ^Screen_Buffer) {
 
 	buffer.width = 0
 	buffer.height = 0
+}
+
+screen_set_background :: proc(buffer: ^Screen_Buffer, r: u8, g: u8, b: u8) {
+	buffer.background_r = r
+	buffer.background_g = g
+	buffer.background_b = b
 }
 
 screen_clear :: proc(buffer: ^Screen_Buffer) {
@@ -69,6 +92,77 @@ screen_put :: proc(buffer: ^Screen_Buffer, x: int, y: int, glyph: string, bold :
 	buffer.cells[index] = Cell{glyph = glyph, bold = bold, color = color}
 }
 
+screen_put_terminal :: proc(
+	buffer: ^Screen_Buffer,
+	x: int,
+	y: int,
+	glyph: string,
+	bold := false,
+	fg_set := false,
+	fg_r: u8 = 0,
+	fg_g: u8 = 0,
+	fg_b: u8 = 0,
+	bg_set := false,
+	bg_r: u8 = 0,
+	bg_g: u8 = 0,
+	bg_b: u8 = 0,
+) {
+	index, ok := screen_index(buffer, x, y)
+	if !ok {
+		return
+	}
+
+	buffer.cells[index] = Cell {
+		glyph = glyph,
+		bold = bold,
+		color = .Default,
+		fg_set = fg_set,
+		fg_r = fg_r,
+		fg_g = fg_g,
+		fg_b = fg_b,
+		bg_set = bg_set,
+		bg_r = bg_r,
+		bg_g = bg_g,
+		bg_b = bg_b,
+	}
+}
+
+screen_put_terminal_rune :: proc(
+	buffer: ^Screen_Buffer,
+	x: int,
+	y: int,
+	rune: u32,
+	bold := false,
+	fg_set := false,
+	fg_r: u8 = 0,
+	fg_g: u8 = 0,
+	fg_b: u8 = 0,
+	bg_set := false,
+	bg_r: u8 = 0,
+	bg_g: u8 = 0,
+	bg_b: u8 = 0,
+) {
+	index, ok := screen_index(buffer, x, y)
+	if !ok {
+		return
+	}
+
+	buffer.cells[index] = Cell {
+		glyph = " ",
+		rune = rune,
+		bold = bold,
+		color = .Default,
+		fg_set = fg_set,
+		fg_r = fg_r,
+		fg_g = fg_g,
+		fg_b = fg_b,
+		bg_set = bg_set,
+		bg_r = bg_r,
+		bg_g = bg_g,
+		bg_b = bg_b,
+	}
+}
+
 screen_put_line :: proc(buffer: ^Screen_Buffer, x: int, y: int, mask: u8, color := Cell_Color.Default) {
 	index, ok := screen_index(buffer, x, y)
 	if !ok {
@@ -78,8 +172,11 @@ screen_put_line :: proc(buffer: ^Screen_Buffer, x: int, y: int, mask: u8, color 
 	cell := &buffer.cells[index]
 	cell.line_mask |= mask
 	cell.glyph = line_glyph(cell.line_mask)
+	cell.rune = 0
 	cell.bold = false
 	cell.color = color
+	cell.fg_set = false
+	cell.bg_set = false
 }
 
 screen_set_color :: proc(buffer: ^Screen_Buffer, x: int, y: int, color: Cell_Color) {

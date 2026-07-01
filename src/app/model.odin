@@ -1,11 +1,24 @@
 package app
 
+import vt "../terminal"
+
+Terminal_Backend :: enum {
+	Simple,
+	Libvterm,
+}
+
 Terminal_Handle :: struct {
-	active:   bool,
-	pty_fd:   int,
-	pid:      int,
-	width:    int,
-	height:   int,
+	backend: Terminal_Backend,
+	active:  bool,
+	pty_fd:  int,
+	pid:     int,
+	width:   int,
+	height:  int,
+
+	vterm:        ^vt.VTerm,
+	vterm_state:  ^vt.VTermState,
+	vterm_screen: ^vt.VTermScreen,
+
 	cursor_x: int,
 	cursor_y: int,
 	cells:              []byte,

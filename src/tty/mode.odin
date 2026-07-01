@@ -1,13 +1,13 @@
-package platform
+package tty
 
 import posix "core:sys/posix"
 
-Terminal_Mode :: struct {
+Mode :: struct {
 	original: posix.termios,
 	active:   bool,
 }
 
-terminal_enter_raw_mode :: proc(mode: ^Terminal_Mode) -> bool {
+enter_raw_mode :: proc(mode: ^Mode) -> bool {
 	if posix.tcgetattr(posix.FD(0), &mode.original) != .OK {
 		return false
 	}
@@ -27,7 +27,7 @@ terminal_enter_raw_mode :: proc(mode: ^Terminal_Mode) -> bool {
 	return true
 }
 
-terminal_restore_mode :: proc(mode: ^Terminal_Mode) {
+restore_mode :: proc(mode: ^Mode) {
 	if !mode.active {
 		return
 	}

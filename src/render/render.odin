@@ -153,7 +153,7 @@ render_pane_label :: proc(buffer: ^Screen_Buffer, pane: ^domain.Pane, focused: b
 		return
 	}
 
-	render_terminal_contents(buffer, pane)
+	render_terminal_contents(buffer, pane, focused)
 }
 
 render_focused_pane_border :: proc(buffer: ^Screen_Buffer, state: ^domain.App, workspace: ^domain.Workspace, content_bounds: domain.Rect) {

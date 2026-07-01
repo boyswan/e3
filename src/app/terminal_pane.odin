@@ -1,6 +1,7 @@
 package app
 
 import "core:c"
+import vt "../terminal"
 import posix "core:sys/posix"
 
 when ODIN_OS == .Linux {
@@ -50,7 +51,15 @@ terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) ->
 	}
 
 	if pid == 0 {
-		argv := [?]cstring{"/bin/sh", nil}
+		_ = posix.setenv("TERM", "xterm-256color", true)
+		_ = posix.setenv("COLORTERM", "truecolor", true)
+
+		shell := posix.getenv("SHELL")
+		if shell == nil {
+			shell = "/bin/sh"
+		}
+
+		argv := [?]cstring{shell, nil}
 		posix.execvp(argv[0], raw_data(argv[:]))
 		posix._exit(127)
 	}
@@ -64,6 +73,11 @@ terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) ->
 
 terminal_resize_grid :: proc(term: ^Terminal_Handle, width: int, height: int) {
 	if width <= 0 || height <= 0 {
+		return
+	}
+
+	if term.backend == .Libvterm {
+		terminal_resize_libvterm(term, width, height)
 		return
 	}
 
@@ -83,6 +97,34 @@ terminal_resize_grid :: proc(term: ^Terminal_Handle, width: int, height: int) {
 	term.cells = make([]byte, width * height)
 	terminal_clear_grid(term)
 
+	terminal_resize_pty(term, width, height)
+}
+
+terminal_resize_libvterm :: proc(term: ^Terminal_Handle, width: int, height: int) {
+	if term.vterm == nil {
+		vt.check_version(0, 3)
+		term.vterm = vt.new(c.int(height), c.int(width))
+		if term.vterm == nil {
+			return
+		}
+
+		vt.set_utf8(term.vterm, 1)
+		term.vterm_state = vt.obtain_state(term.vterm)
+		term.vterm_screen = vt.obtain_screen(term.vterm)
+		if term.vterm_screen != nil {
+			vt.set_damage_merge(term.vterm_screen, .Screen)
+			vt.reset(term.vterm_screen, 1)
+		}
+	} else if term.width != width || term.height != height {
+		vt.set_size(term.vterm, c.int(height), c.int(width))
+	}
+
+	term.width = width
+	term.height = height
+	terminal_resize_pty(term, width, height)
+}
+
+terminal_resize_pty :: proc(term: ^Terminal_Handle, width: int, height: int) {
 	if term.active {
 		winsize := Pty_Winsize {
 			row = u16(height),
@@ -104,6 +146,9 @@ terminal_destroy :: proc(term: ^Terminal_Handle) {
 	}
 	if term.cells != nil {
 		delete(term.cells)
+	}
+	if term.vterm != nil {
+		vt.free(term.vterm)
 	}
 	term^ = Terminal_Handle{}
 }
@@ -143,8 +188,40 @@ terminal_write_input :: proc(term: ^Terminal_Handle, data: []byte) -> bool {
 }
 
 terminal_write_output :: proc(term: ^Terminal_Handle, data: []byte) {
+	if term.backend == .Libvterm {
+		terminal_write_libvterm_output(term, data)
+		return
+	}
+
 	for byte_value in data {
 		terminal_put_output_byte(term, byte_value)
+	}
+}
+
+terminal_write_libvterm_output :: proc(term: ^Terminal_Handle, data: []byte) {
+	if term.vterm == nil || len(data) == 0 {
+		return
+	}
+
+	vt.input_write(term.vterm, raw_data(data), c.size_t(len(data)))
+	terminal_drain_libvterm_output(term)
+	if term.vterm_screen != nil {
+		vt.flush_damage(term.vterm_screen)
+	}
+}
+
+terminal_drain_libvterm_output :: proc(term: ^Terminal_Handle) {
+	if term.vterm == nil || !term.active {
+		return
+	}
+
+	for vt.output_get_buffer_current(term.vterm) > 0 {
+		buffer: [4096]byte
+		count := vt.output_read(term.vterm, raw_data(buffer[:]), c.size_t(len(buffer)))
+		if count == 0 {
+			return
+		}
+		posix.write(posix.FD(term.pty_fd), raw_data(buffer[:count]), count)
 	}
 }
 

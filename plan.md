@@ -192,11 +192,18 @@ Later features:
 - Added a cell-buffer renderer: layout writes into `Screen_Buffer`, then a backend presents the surface.
 - Introduced a `Renderer` abstraction with `TTY` and `SDL3` backends so UI/layout rendering is no longer wired directly to terminal output.
 - Added a first SDL3 backend using Odin's `vendor:sdl3`: it opens a resizable native window, maps the cell surface to SDL debug text, and presents the same mux UI through SDL.
-- Reorganized source into focused packages instead of a single mux package: `src/app` for state/tree/commands/panes, `src/render` for surfaces/renderers/backends, and `src/platform` for TTY input/mode/size, with `src/main.odin` as the executable entrypoint.
+- Reorganized source into focused packages instead of a single mux package: `src/app` for state/tree/commands/panes, `src/render` for surfaces/layout rendering, `src/renderer` for the backend façade, `src/sdl` for native SDL rendering/input, `src/tty` for terminal rendering/input/mode/size, and `src/input` for backend-agnostic input actions/bindings, with `src/main.odin` as the executable entrypoint.
 - SDL3/native rendering is now the default; pass `--tty` or `--terminal` to use the terminal renderer.
 - SDL3 mode now uses native SDL keyboard/text/window events instead of terminal stdin/raw mode: Alt keybindings map to existing mux commands, text and special keys route to the focused PTY, and window close quits.
 - Improved SDL3 presentation: larger native cells/text and vector-drawn 1px separator/border lines instead of relying on tiny debug-text box-drawing glyphs.
 - Improved the stepping-stone PTY terminal parser with basic CSI handling: cursor movement/positioning, clear screen/line, SGR/mode ignore, OSC skipping, bracketed paste mode ignore, and reverse index.
+- Started libvterm integration: switched the Nix shell to `libvterm-neovim` (the C ABI with `vterm_new`/screen APIs) and added minimal Odin bindings in `src/terminal/libvterm.odin`.
+- Added a terminal backend switch and made new panes use libvterm: PTY output now feeds `vterm_input_write`, damage is flushed, libvterm response bytes are drained back to the PTY, and rendering reads cells via `vterm_screen_get_cell`.
+- Plumbed libvterm cell attributes into rendering: cells now carry optional RGB foreground/background colors, bold and reverse video are handled, SDL draws terminal backgrounds/text colors, and the TTY backend emits truecolor ANSI for terminal cell colors.
+- Improved libvterm rendering fidelity: cells now preserve UTF-32 codepoints and encode them to UTF-8 at presentation time instead of replacing unknown glyphs with `?`; the focused pane cursor is drawn by inverting the libvterm cursor cell; libvterm default fg/bg colors are aligned to the app palette.
+- Replaced SDL debug text with SDL3_ttf for native mode. SDL now resolves system fonts through Fontconfig or an explicit font path; no fonts are bundled.
+- Added a basic persistent YAML-style config (`config.yaml`, also searches `odin-play.yaml` and XDG config paths) for native font, window background, SDL modifier key settings, and SDL keybindings instead of relying on environment variables.
+- Tidied render backend structure: `src/renderer` now owns the small backend-agnostic renderer façade, SDL-specific state/rendering/font/cache/input code lives in `src/sdl`, and TTY output/input/mode/size code lives in `src/tty`.
 - ANSI escape handling is isolated in the TTY backend instead of being scattered through render code.
 - Renderer draws one outer frame, shared no-margin split separators, a colored focused-pane border, and a bottom workspace bar without a label.
 - Focused pane insert hint is inactive until split mode is entered; active split-right colors the focused pane's right edge and active split-down colors its bottom edge.

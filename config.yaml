@@ -1,0 +1,38 @@
+# odin-play configuration
+
+font:
+  # Resolved through Fontconfig. Use `fc-match <family>` to preview.
+  family: "MesloLGL Nerd Font"
+  # Optional explicit font file. Leave empty to use `family`.
+  path: ""
+  size: 24
+
+window:
+  background: "#0a0a0c"
+
+input:
+  # alt/option/opt or super/gui/cmd/command/meta
+  # mod: "super"
+  mod: "alt"
+
+  # Key names are matched with the configured mod key.
+  # Use "shift+<key>" for shifted bindings.
+  quit: "q"
+  split_right: "d"
+  split_down: "shift+d"
+  open_pane: "enter"
+  close_pane: "w"
+  dump_tree: "t"
+  focus_left: "h"
+  focus_down: "j"
+  focus_up: "k"
+  focus_right: "l"
+  workspace_1: "1"
+  workspace_2: "2"
+  workspace_3: "3"
+  workspace_4: "4"
+  workspace_5: "5"
+  workspace_6: "6"
+  workspace_7: "7"
+  workspace_8: "8"
+  workspace_9: "9"
