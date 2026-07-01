@@ -7,6 +7,7 @@ Command_Kind :: enum {
 	Switch_Workspace,
 	Focus,
 	Close_Pane,
+	Dump_Tree,
 }
 
 Command :: struct {
@@ -39,6 +40,10 @@ command_close_pane :: proc() -> Command {
 	return Command{kind = .Close_Pane}
 }
 
+command_dump_tree :: proc() -> Command {
+	return Command{kind = .Dump_Tree}
+}
+
 execute_command :: proc(app: ^App, command: Command) -> bool {
 	switch command.kind {
 	case .Set_Split_Right:
@@ -53,6 +58,8 @@ execute_command :: proc(app: ^App, command: Command) -> bool {
 		return focus_direction(app, command.direction)
 	case .Close_Pane:
 		return close_focused_pane(app)
+	case .Dump_Tree:
+		return dump_tree(app)
 	}
 
 	return false

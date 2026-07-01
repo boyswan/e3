@@ -203,6 +203,7 @@ Later features:
 - Split context now follows i3 behavior with an explicit per-pane active state: entering split mode wraps the focused pane in a one-child split container when needed, changing split direction updates that context, and `Opt+Enter` consumes the active mode by inserting a new pane after the focused pane.
 - Added layout cleanup helpers to remove empty containers, collapse one-child split containers, and repair weights/focus indexes. Same-orientation nested split containers are preserved because they can represent intentional i3 split context.
 - Added focused pane close behavior; closing a pane removes it from the tree, selects a nearby fallback pane, and runs layout cleanup.
+- Added `Opt+t` debug tree dumping to `/tmp/odin-play-tree.log`, including workspace state, node kind/order, focus indexes, bounds, and pane split mode state.
 - The render loop recreates the screen buffer when the terminal size changes, currently checked before each redraw/input cycle.
 - Terminal flushing no longer clears the screen on every frame; the alternate screen is cleared once on entry, then full frames overwrite cells in place to reduce flicker.
 - Added basic i3-style split tree creation for horizontal and vertical splits.

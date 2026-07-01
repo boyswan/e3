@@ -60,6 +60,8 @@ action_from_modified_key :: proc(key: byte) -> Input_Action {
 		return Input_Action{kind = .Command, command = command_open_pane()}
 	case 'w':
 		return Input_Action{kind = .Command, command = command_close_pane()}
+	case 't':
+		return Input_Action{kind = .Command, command = command_dump_tree()}
 	case 'h':
 		return Input_Action{kind = .Command, command = command_focus(.Left)}
 	case 'j':
