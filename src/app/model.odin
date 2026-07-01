@@ -1,6 +1,16 @@
 package app
 
-Terminal_Handle :: struct {}
+Terminal_Handle :: struct {
+	active:   bool,
+	pty_fd:   int,
+	pid:      int,
+	width:    int,
+	height:   int,
+	cursor_x: int,
+	cursor_y: int,
+	cells:    []byte,
+	escape:   int,
+}
 
 Rect :: struct {
 	x:      int,

@@ -344,6 +344,8 @@ close_focused_pane :: proc(app: ^App) -> bool {
 		return false
 	}
 
+	terminal_destroy(&focused.pane.terminal)
+
 	parent := focused.parent
 	if parent == nil {
 		workspace.root = nil

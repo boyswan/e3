@@ -1,48 +1,62 @@
-package app
+package main
+
+import domain "./app"
+import platform "./platform"
+import ui "./render"
 
 main :: proc() {
-	app: App
-	init_app(&app)
+	state: domain.App
+	domain.init_app(&state)
 
-	execute_command(&app, command_set_split_right())
-	execute_command(&app, command_open_pane())
-	execute_command(&app, command_set_split_down())
-	execute_command(&app, command_open_pane())
-	execute_command(&app, command_switch_workspace(2))
-	execute_command(&app, command_set_split_down())
-	execute_command(&app, command_open_pane())
-	execute_command(&app, command_switch_workspace(1))
+	domain.execute_command(&state, domain.command_set_split_right())
+	domain.execute_command(&state, domain.command_open_pane())
+	domain.execute_command(&state, domain.command_set_split_down())
+	domain.execute_command(&state, domain.command_open_pane())
+	domain.execute_command(&state, domain.command_switch_workspace(2))
+	domain.execute_command(&state, domain.command_set_split_down())
+	domain.execute_command(&state, domain.command_open_pane())
+	domain.execute_command(&state, domain.command_switch_workspace(1))
 
-	width, height := terminal_size_or_default(80, 24)
-	screen := make_screen_buffer(width, height)
-	defer destroy_screen_buffer(&screen)
+	width, height := platform.terminal_size_or_default(80, 24)
+	renderer := ui.renderer_make(.TTY, width, height)
+	defer ui.renderer_destroy(&renderer)
 
-	terminal_enter_app_screen()
-	defer terminal_leave_app_screen()
+	ui.renderer_begin(&renderer)
+	defer ui.renderer_end(&renderer)
 
-	mode: Terminal_Mode
-	terminal_enter_raw_mode(&mode)
-	defer terminal_restore_mode(&mode)
+	mode: platform.Terminal_Mode
+	platform.terminal_enter_raw_mode(&mode)
+	defer platform.terminal_restore_mode(&mode)
 
 	running := true
 	for running {
-		new_width, new_height := terminal_size_or_default(80, 24)
-		if new_width != screen.width || new_height != screen.height {
-			destroy_screen_buffer(&screen)
-			screen = make_screen_buffer(new_width, new_height)
+		domain.poll_all_terminals(&state)
+
+		new_width, new_height := platform.terminal_size_or_default(80, 24)
+		ui.renderer_resize(&renderer, new_width, new_height)
+
+		ui.render_app(&renderer.surface, &state, domain.Rect {
+			x = 0,
+			y = 0,
+			width = ui.renderer_width(&renderer),
+			height = ui.renderer_height(&renderer),
+		})
+		ui.renderer_present(&renderer)
+
+		if !platform.input_wait(50) {
+			continue
 		}
 
-		render_app(&screen, &app, Rect{x = 0, y = 0, width = screen.width, height = screen.height})
-		terminal_flush_screen(&screen)
-
-		action := read_input_action()
+		action := platform.read_input_action()
 		switch action.kind {
 		case .None:
 			// Ignore unknown input.
 		case .Quit:
 			running = false
 		case .Command:
-			execute_command(&app, action.command)
+			domain.execute_command(&state, action.command)
+		case .Pane_Input:
+			domain.write_focused_terminal(&state, action.input_data[:action.input_len])
 		}
 	}
 }

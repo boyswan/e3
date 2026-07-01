@@ -1,4 +1,6 @@
-package app
+package render
+
+import domain "../app"
 
 LINE_UP    :: u8(1 << 0)
 LINE_DOWN  :: u8(1 << 1)
@@ -230,7 +232,7 @@ screen_draw_vertical_line :: proc(buffer: ^Screen_Buffer, x: int, y: int, height
 	}
 }
 
-screen_draw_box :: proc(buffer: ^Screen_Buffer, bounds: Rect) {
+screen_draw_box :: proc(buffer: ^Screen_Buffer, bounds: domain.Rect) {
 	if bounds.width < 2 || bounds.height < 2 {
 		return
 	}

@@ -1,34 +1,37 @@
-package app
+package render
 
-render_app :: proc(buffer: ^Screen_Buffer, app: ^App, bounds: Rect) {
-	workspace := active_workspace(app)
+import domain "../app"
+
+render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Rect) {
+	workspace := domain.active_workspace(state)
 	if workspace == nil {
 		return
 	}
 
 	screen_clear(buffer)
 
-	content_bounds := Rect {
+	content_bounds := domain.Rect {
 		x = bounds.x,
 		y = bounds.y,
 		width = bounds.width,
 		height = bounds.height - 1,
 	}
 
-	layout_workspace(workspace, content_bounds)
+	domain.layout_workspace(workspace, content_bounds)
+	domain.sync_pane_terminals(workspace.root)
 	render_split_separators(buffer, workspace.root)
 	screen_draw_box(buffer, content_bounds)
-	render_focused_pane_border(buffer, app, workspace, content_bounds)
+	render_focused_pane_border(buffer, state, workspace, content_bounds)
 	render_pane_labels(buffer, workspace.root, workspace.focused_pane_id)
-	render_workspace_bar(buffer, app, Rect{x = bounds.x, y = bounds.y + bounds.height - 1, width = bounds.width, height = 1})
+	render_workspace_bar(buffer, state, domain.Rect{x = bounds.x, y = bounds.y + bounds.height - 1, width = bounds.width, height = 1})
 }
 
-render_workspace_bar :: proc(buffer: ^Screen_Buffer, app: ^App, bounds: Rect) {
+render_workspace_bar :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Rect) {
 	cursor_x := bounds.x
 
-	for index in 0 ..< len(app.workspaces) {
-		workspace := &app.workspaces[index]
-		if index == app.active_workspace_index {
+	for index in 0 ..< len(state.workspaces) {
+		workspace := &state.workspaces[index]
+		if index == state.active_workspace_index {
 			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, "[")
 			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, workspace.name, true)
 			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, "] ")
@@ -39,7 +42,7 @@ render_workspace_bar :: proc(buffer: ^Screen_Buffer, app: ^App, bounds: Rect) {
 		}
 	}
 
-	split_kind, has_split_kind := focused_insertion_kind(app)
+	split_kind, has_split_kind := focused_insertion_kind(state)
 	if has_split_kind {
 		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " split:")
 		if split_kind == .Split_Horizontal {
@@ -50,7 +53,7 @@ render_workspace_bar :: proc(buffer: ^Screen_Buffer, app: ^App, bounds: Rect) {
 	}
 }
 
-render_split_separators :: proc(buffer: ^Screen_Buffer, node: ^Node) {
+render_split_separators :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
 	if node == nil {
 		return
 	}
@@ -71,7 +74,7 @@ render_split_separators :: proc(buffer: ^Screen_Buffer, node: ^Node) {
 		line_y := bounds.y
 		line_height := bounds.height
 		if node.parent != nil && node.parent.kind == .Split_Vertical {
-			index := find_child_index(node.parent, node)
+			index := domain.find_child_index(node.parent, node)
 			if index >= 0 && index < len(node.parent.children) - 1 {
 				line_height += 1
 			}
@@ -116,7 +119,7 @@ render_split_separators :: proc(buffer: ^Screen_Buffer, node: ^Node) {
 	}
 }
 
-render_pane_labels :: proc(buffer: ^Screen_Buffer, node: ^Node, focused_pane_id: int) {
+render_pane_labels :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, focused_pane_id: int) {
 	if node == nil {
 		return
 	}
@@ -144,19 +147,17 @@ render_pane_labels :: proc(buffer: ^Screen_Buffer, node: ^Node, focused_pane_id:
 	}
 }
 
-render_pane_label :: proc(buffer: ^Screen_Buffer, pane: ^Pane, focused: bool) {
+render_pane_label :: proc(buffer: ^Screen_Buffer, pane: ^domain.Pane, focused: bool) {
 	bounds := pane.bounds
 	if bounds.width <= 3 || bounds.height <= 2 {
 		return
 	}
 
-	cursor_x := bounds.x + 1
-	cursor_x = screen_put_text(buffer, cursor_x, bounds.y + 1, "pane ")
-	screen_put_int(buffer, cursor_x, bounds.y + 1, pane.id)
+	render_terminal_contents(buffer, pane)
 }
 
-render_focused_pane_border :: proc(buffer: ^Screen_Buffer, app: ^App, workspace: ^Workspace, content_bounds: Rect) {
-	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+render_focused_pane_border :: proc(buffer: ^Screen_Buffer, state: ^domain.App, workspace: ^domain.Workspace, content_bounds: domain.Rect) {
+	focused := domain.find_focused_node(workspace.root, workspace.focused_pane_id)
 	if focused == nil || focused.pane == nil {
 		return
 	}
@@ -201,17 +202,17 @@ render_focused_pane_border :: proc(buffer: ^Screen_Buffer, app: ^App, workspace:
 	}
 }
 
-focused_insertion_kind :: proc(app: ^App) -> (Node_Kind, bool) {
-	workspace := active_workspace(app)
+focused_insertion_kind :: proc(state: ^domain.App) -> (domain.Node_Kind, bool) {
+	workspace := domain.active_workspace(state)
 	if workspace == nil {
 		return .Pane, false
 	}
 
-	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+	focused := domain.find_focused_node(workspace.root, workspace.focused_pane_id)
 	return focused_node_insertion_kind(focused)
 }
 
-focused_node_insertion_kind :: proc(focused: ^Node) -> (Node_Kind, bool) {
+focused_node_insertion_kind :: proc(focused: ^domain.Node) -> (domain.Node_Kind, bool) {
 	if focused == nil || focused.pane == nil || !focused.pane.split_active {
 		return .Pane, false
 	}
@@ -219,26 +220,26 @@ focused_node_insertion_kind :: proc(focused: ^Node) -> (Node_Kind, bool) {
 	return focused.pane.split_kind, true
 }
 
-node_bounds :: proc(node: ^Node) -> (Rect, bool) {
+node_bounds :: proc(node: ^domain.Node) -> (domain.Rect, bool) {
 	if node == nil {
-		return Rect{}, false
+		return domain.Rect{}, false
 	}
 
 	switch node.kind {
 	case .Pane:
 		if node.pane == nil {
-			return Rect{}, false
+			return domain.Rect{}, false
 		}
 
 		return node.pane.bounds, true
 	case .Split_Horizontal, .Split_Vertical:
 		if len(node.children) == 0 {
-			return Rect{}, false
+			return domain.Rect{}, false
 		}
 
 		bounds, ok := node_bounds(node.children[0])
 		if !ok {
-			return Rect{}, false
+			return domain.Rect{}, false
 		}
 
 		for index in 1 ..< len(node.children) {
@@ -251,7 +252,7 @@ node_bounds :: proc(node: ^Node) -> (Rect, bool) {
 		return bounds, true
 	case .Stacked, .Tabbed:
 		if len(node.children) == 0 {
-			return Rect{}, false
+			return domain.Rect{}, false
 		}
 
 		index := node.focused_child_index
@@ -262,16 +263,16 @@ node_bounds :: proc(node: ^Node) -> (Rect, bool) {
 		return node_bounds(node.children[index])
 	}
 
-	return Rect{}, false
+	return domain.Rect{}, false
 }
 
-rect_union :: proc(a: Rect, b: Rect) -> Rect {
+rect_union :: proc(a: domain.Rect, b: domain.Rect) -> domain.Rect {
 	left := min_int(a.x, b.x)
 	top := min_int(a.y, b.y)
 	right := max_int(a.x + a.width, b.x + b.width)
 	bottom := max_int(a.y + a.height, b.y + b.height)
 
-	return Rect {
+	return domain.Rect {
 		x = left,
 		y = top,
 		width = right - left,

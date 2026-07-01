@@ -189,8 +189,10 @@ Later features:
 - Workspaces now create their first pane only when opened or modified.
 - Added basic active workspace switching.
 - Added an initial command layer for split intent selection, opening panes, workspace switching, focus movement, and pane close.
-- Added a cell-buffer renderer: layout writes into `Screen_Buffer`, then `terminal_out` flushes cells with ANSI.
-- ANSI escape handling is isolated in the terminal output backend instead of being scattered through render code.
+- Added a cell-buffer renderer: layout writes into `Screen_Buffer`, then a backend presents the surface.
+- Introduced a `Renderer` abstraction with `TTY` and placeholder `SDL3` backends so UI/layout rendering is no longer wired directly to terminal output.
+- Reorganized source into focused packages instead of a single mux package: `src/app` for state/tree/commands/panes, `src/render` for surfaces/renderers/backends, and `src/platform` for TTY input/mode/size, with `src/main.odin` as the executable entrypoint.
+- ANSI escape handling is isolated in the TTY backend instead of being scattered through render code.
 - Renderer draws one outer frame, shared no-margin split separators, a colored focused-pane border, and a bottom workspace bar without a label.
 - Focused pane insert hint is inactive until split mode is entered; active split-right colors the focused pane's right edge and active split-down colors its bottom edge.
 - Screen line drawing now composes box-drawing junctions (`┬`, `├`, `┴`, etc.) from line connection masks instead of overwriting glyphs.
@@ -202,13 +204,15 @@ Later features:
 - Focus movement uses i3-style wrapping: at an edge, keep climbing first; if no higher-level move exists, wrap within the nearest matching split.
 - Split context now follows i3 behavior with an explicit per-pane active state: entering split mode wraps the focused pane in a one-child split container when needed, changing split direction updates that context, and `Opt+Enter` consumes the active mode by inserting a new pane after the focused pane.
 - Added layout cleanup helpers to remove empty containers, collapse one-child split containers, and repair weights/focus indexes. Same-orientation nested split containers are preserved because they can represent intentional i3 split context.
-- Added focused pane close behavior; closing a pane removes it from the tree, selects a nearby fallback pane, and runs layout cleanup.
+- Added focused pane close behavior; closing a pane removes it from the tree, closes its PTY master, selects a nearby fallback pane, and runs layout cleanup.
 - Added `Opt+t` debug tree dumping to `/tmp/odin-play-tree.log`, including workspace state, node kind/order, focus indexes, bounds, and pane split mode state.
 - The render loop recreates the screen buffer when the terminal size changes, currently checked before each redraw/input cycle.
 - Terminal flushing no longer clears the screen on every frame; the alternate screen is cleared once on entry, then full frames overwrite cells in place to reduce flicker.
 - Added basic i3-style split tree creation for horizontal and vertical splits.
 - Added recursive layout calculation for split, stacked, tabbed, and pane nodes.
-- Terminal integration is still stubbed behind `Terminal_Handle`.
+- Investigated `libghostty-odin`: it provides Odin bindings/wrappers for `libghostty-vt`, but requires building the Ghostty VT library separately with Zig.
+- Added the first real terminal-pane vertical slice using PTY-backed `/bin/sh` processes, pane-local text grids, resize propagation, pane input routing, and basic output rendering.
+- `Terminal_Handle` is no longer an empty stub; it now owns PTY state and a simple terminal grid. This is intentionally a stepping stone before replacing the text grid with `libghostty-vt` rendering.
 
 ## Open Questions
 
