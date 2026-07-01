@@ -100,8 +100,12 @@ set_style :: proc(cell: render.Cell) {
 		if cell.fg_set {
 			fmt.printf("\x1b[38;2;%d;%d;%dm", cell.fg_r, cell.fg_g, cell.fg_b)
 		}
+	case .Inactive:
+		fmt.print("\x1b[90m")
+	case .Focused_Inactive:
+		fmt.print("\x1b[37m")
 	case .Focused:
-		fmt.print("\x1b[36m")
+		fmt.print("\x1b[34m")
 	case .Split_Hint:
 		fmt.print("\x1b[35m")
 	}

@@ -9,6 +9,8 @@ LINE_RIGHT :: u8(1 << 3)
 
 Cell_Color :: enum {
 	Default,
+	Inactive,
+	Focused_Inactive,
 	Focused,
 	Split_Hint,
 }

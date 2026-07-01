@@ -22,6 +22,7 @@ render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Re
 	domain.sync_pane_terminals(workspace.root)
 	render_split_separators(buffer, workspace.root)
 	screen_draw_box(buffer, content_bounds)
+	render_pane_borders(buffer, workspace.root, workspace.focused_pane_id, content_bounds)
 	render_focused_pane_border(buffer, state, workspace, content_bounds, mode)
 	render_pane_labels(buffer, workspace.root, workspace.focused_pane_id)
 	render_workspace_bar(buffer, state, mode, domain.Rect{x = bounds.x, y = bounds.y + bounds.height - 1, width = bounds.width, height = 1})
@@ -162,6 +163,58 @@ render_pane_label :: proc(buffer: ^Screen_Buffer, pane: ^domain.Pane, focused: b
 	}
 
 	render_terminal_contents(buffer, pane, focused)
+}
+
+render_pane_borders :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, focused_pane_id: int, content_bounds: domain.Rect) {
+	if node == nil {
+		return
+	}
+
+	switch node.kind {
+	case .Pane:
+		if node.pane == nil || node.pane.id == focused_pane_id {
+			return
+		}
+
+		color := Cell_Color.Inactive
+		if node.parent != nil && len(node.parent.focus_order) > 0 && node.parent.focus_order[0] == node {
+			color = .Focused_Inactive
+		}
+		render_pane_border(buffer, node.pane.bounds, content_bounds, color)
+	case .Split_Horizontal, .Split_Vertical:
+		for child in node.children {
+			render_pane_borders(buffer, child, focused_pane_id, content_bounds)
+		}
+	case .Stacked, .Tabbed:
+		child := domain.descend_focused(node)
+		if child != nil {
+			render_pane_borders(buffer, child, focused_pane_id, content_bounds)
+		}
+	}
+}
+
+render_pane_border :: proc(buffer: ^Screen_Buffer, bounds: domain.Rect, content_bounds: domain.Rect, color: Cell_Color) {
+	left := bounds.x
+	right := bounds.x + bounds.width
+	top := bounds.y
+	bottom := bounds.y + bounds.height
+
+	if right >= content_bounds.x + content_bounds.width {
+		right = content_bounds.x + content_bounds.width - 1
+	}
+	if bottom >= content_bounds.y + content_bounds.height {
+		bottom = content_bounds.y + content_bounds.height - 1
+	}
+
+	for x in left ..= right {
+		screen_set_color(buffer, x, top, color)
+		screen_set_color(buffer, x, bottom, color)
+	}
+
+	for y in top ..= bottom {
+		screen_set_color(buffer, left, y, color)
+		screen_set_color(buffer, right, y, color)
+	}
 }
 
 render_focused_pane_border :: proc(buffer: ^Screen_Buffer, state: ^domain.App, workspace: ^domain.Workspace, content_bounds: domain.Rect, mode: input.Input_Mode) {

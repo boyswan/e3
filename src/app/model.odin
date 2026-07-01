@@ -70,6 +70,7 @@ Node :: struct {
 	// Container node state.
 	children:            [dynamic]^Node,
 	focused_child_index: int,
+	focus_order:         [dynamic]^Node,
 	weights:             [dynamic]f32,
 }
 

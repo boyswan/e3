@@ -46,6 +46,7 @@ make_container_node :: proc(kind: Node_Kind) -> ^Node {
 	node := new(Node)
 	node.kind = kind
 	node.children = make([dynamic]^Node)
+	node.focus_order = make([dynamic]^Node)
 	node.weights = make([dynamic]f32)
 	return node
 }

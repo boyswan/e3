@@ -483,8 +483,12 @@ cell_color :: proc(surface: ^render.Screen_Buffer, cell: render.Cell) -> (int, i
 			return int(cell.fg_r), int(cell.fg_g), int(cell.fg_b)
 		}
 		return int(surface.foreground_r), int(surface.foreground_g), int(surface.foreground_b)
+	case .Inactive:
+		return int(surface.palette[8].r), int(surface.palette[8].g), int(surface.palette[8].b)
+	case .Focused_Inactive:
+		return int(surface.palette[7].r), int(surface.palette[7].g), int(surface.palette[7].b)
 	case .Focused:
-		return int(surface.palette[14].r), int(surface.palette[14].g), int(surface.palette[14].b)
+		return int(surface.palette[4].r), int(surface.palette[4].g), int(surface.palette[4].b)
 	case .Split_Hint:
 		return int(surface.palette[13].r), int(surface.palette[13].g), int(surface.palette[13].b)
 	}
