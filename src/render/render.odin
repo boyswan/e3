@@ -31,14 +31,16 @@ render_workspace_bar :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds:
 
 	for index in 0 ..< len(state.workspaces) {
 		workspace := &state.workspaces[index]
-		if index == state.active_workspace_index {
-			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, "[")
-			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, workspace.name, true)
-			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, "] ")
-		} else {
-			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " ")
-			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, workspace.name)
-			cursor_x = screen_put_text(buffer, cursor_x, bounds.y, "  ")
+		start_x := cursor_x
+		active := index == state.active_workspace_index
+
+		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " ")
+		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, workspace.name, active)
+		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " ")
+
+		if active {
+			active_bg := buffer.palette[0]
+			screen_set_range_background(buffer, start_x, bounds.y, cursor_x - start_x, active_bg.r, active_bg.g, active_bg.b)
 		}
 	}
 

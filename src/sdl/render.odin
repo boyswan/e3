@@ -13,6 +13,9 @@ Glyph_Texture :: struct {
 	r:       u8,
 	g:       u8,
 	b:       u8,
+	bg_r:    u8,
+	bg_g:    u8,
+	bg_b:    u8,
 	texture: ^sdl3.Texture,
 	width:   f32,
 	height:  f32,
@@ -161,24 +164,22 @@ present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Re
 }
 
 draw_cell :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y: int, cell: render.Cell) {
-	fg_r, fg_g, fg_b := cell_color(cell)
+	fg_r, fg_g, fg_b := cell_color(surface, cell)
 	if cell.bold && !cell.fg_set {
 		fg_r = min_int(fg_r + 40, 255)
 		fg_g = min_int(fg_g + 40, 255)
 		fg_b = min_int(fg_b + 40, 255)
 	}
 
-	if cell.bg_set || cell.color != .Default {
-		rect := sdl3.FRect {
-			x = f32(x * state.cell_width),
-			y = f32(y * state.cell_height),
-			w = f32(state.cell_width),
-			h = f32(state.cell_height),
-		}
-		bg_r, bg_g, bg_b := cell_background(cell)
-		sdl3.SetRenderDrawColor(state.renderer, u8(bg_r), u8(bg_g), u8(bg_b), 255)
-		sdl3.RenderFillRect(state.renderer, &rect)
+	bg_r, bg_g, bg_b := cell_background(surface, cell)
+	rect := sdl3.FRect {
+		x = f32(x * state.cell_width),
+		y = f32(y * state.cell_height),
+		w = f32(state.cell_width),
+		h = f32(state.cell_height),
 	}
+	sdl3.SetRenderDrawColor(state.renderer, u8(bg_r), u8(bg_g), u8(bg_b), 255)
+	sdl3.RenderFillRect(state.renderer, &rect)
 
 	if cell.line_mask != 0 {
 		draw_line_cell(state, surface, x, y, fg_r, fg_g, fg_b)
@@ -186,7 +187,7 @@ draw_cell :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y: int,
 	}
 
 	if state.font != nil {
-		draw_font_cell(state, x, y, cell, fg_r, fg_g, fg_b)
+		draw_font_cell(state, x, y, cell, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b)
 		return
 	}
 
@@ -258,13 +259,13 @@ resolve_font_path :: proc(config: render.Renderer_Config) -> string {
 	return ""
 }
 
-draw_font_cell :: proc(state: ^State, x: int, y: int, cell: render.Cell, fg_r: int, fg_g: int, fg_b: int) {
+draw_font_cell :: proc(state: ^State, x: int, y: int, cell: render.Cell, fg_r: int, fg_g: int, fg_b: int, bg_r: int, bg_g: int, bg_b: int) {
 	rune := cell_rune(cell)
 	if rune == 0 || rune == ' ' {
 		return
 	}
 
-	entry := get_glyph_texture(state, rune, u8(fg_r), u8(fg_g), u8(fg_b))
+	entry := get_glyph_texture(state, rune, u8(fg_r), u8(fg_g), u8(fg_b), u8(bg_r), u8(bg_g), u8(bg_b))
 	if entry == nil || entry.texture == nil {
 		return
 	}
@@ -288,10 +289,10 @@ cell_rune :: proc(cell: render.Cell) -> u32 {
 	return 0
 }
 
-get_glyph_texture :: proc(state: ^State, rune: u32, r: u8, g: u8, b: u8) -> ^Glyph_Texture {
+get_glyph_texture :: proc(state: ^State, rune: u32, r: u8, g: u8, b: u8, bg_r: u8, bg_g: u8, bg_b: u8) -> ^Glyph_Texture {
 	for index in 0 ..< len(state.glyph_cache) {
 		entry := &state.glyph_cache[index]
-		if entry.rune == rune && entry.r == r && entry.g == g && entry.b == b {
+		if entry.rune == rune && entry.r == r && entry.g == g && entry.b == b && entry.bg_r == bg_r && entry.bg_g == bg_g && entry.bg_b == bg_b {
 			return entry
 		}
 	}
@@ -304,7 +305,8 @@ get_glyph_texture :: proc(state: ^State, rune: u32, r: u8, g: u8, b: u8) -> ^Gly
 	text[text_len] = 0
 
 	fg := sdl3.Color{r, g, b, 255}
-	surface := ttf.RenderText_Blended(state.font, cstring(&text[0]), c.size_t(text_len), fg)
+	bg := sdl3.Color{bg_r, bg_g, bg_b, 255}
+	surface := ttf.RenderText_LCD(state.font, cstring(&text[0]), c.size_t(text_len), fg, bg)
 	if surface == nil {
 		return nil
 	}
@@ -314,6 +316,7 @@ get_glyph_texture :: proc(state: ^State, rune: u32, r: u8, g: u8, b: u8) -> ^Gly
 	if texture == nil {
 		return nil
 	}
+	_ = sdl3.SetTextureBlendMode(texture, sdl3.BLENDMODE_BLEND)
 
 	texture_width: f32
 	texture_height: f32
@@ -327,6 +330,9 @@ get_glyph_texture :: proc(state: ^State, rune: u32, r: u8, g: u8, b: u8) -> ^Gly
 		r = r,
 		g = g,
 		b = b,
+		bg_r = bg_r,
+		bg_g = bg_g,
+		bg_b = bg_b,
 		texture = texture,
 		width = texture_width,
 		height = texture_height,
@@ -414,30 +420,27 @@ draw_line_cell :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y:
 	}
 }
 
-cell_color :: proc(cell: render.Cell) -> (int, int, int) {
+cell_color :: proc(surface: ^render.Screen_Buffer, cell: render.Cell) -> (int, int, int) {
 	switch cell.color {
 	case .Default:
 		if cell.fg_set {
 			return int(cell.fg_r), int(cell.fg_g), int(cell.fg_b)
 		}
-		return 220, 220, 220
+		return int(surface.foreground_r), int(surface.foreground_g), int(surface.foreground_b)
 	case .Focused:
-		return 0, 220, 255
+		return int(surface.palette[14].r), int(surface.palette[14].g), int(surface.palette[14].b)
 	case .Split_Hint:
-		return 255, 0, 220
+		return int(surface.palette[13].r), int(surface.palette[13].g), int(surface.palette[13].b)
 	}
 
-	return 220, 220, 220
+	return int(surface.foreground_r), int(surface.foreground_g), int(surface.foreground_b)
 }
 
-cell_background :: proc(cell: render.Cell) -> (int, int, int) {
-	if cell.color != .Default {
-		return 24, 24, 30
-	}
+cell_background :: proc(surface: ^render.Screen_Buffer, cell: render.Cell) -> (int, int, int) {
 	if cell.bg_set {
 		return int(cell.bg_r), int(cell.bg_g), int(cell.bg_b)
 	}
-	return 10, 10, 12
+	return int(surface.background_r), int(surface.background_g), int(surface.background_b)
 }
 
 min_int :: proc(a: int, b: int) -> int {

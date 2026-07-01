@@ -29,7 +29,7 @@ make :: proc(kind: Kind, width: int, height: int, config: render.Renderer_Config
 		surface = render.make_screen_buffer(width, height),
 		sdl = sdl_state,
 	}
-	apply_surface_background(&renderer)
+	apply_surface_theme(&renderer)
 
 	return renderer
 }
@@ -76,12 +76,15 @@ resize :: proc(renderer: ^Renderer, width: int, height: int) {
 
 	render.destroy_screen_buffer(&renderer.surface)
 	renderer.surface = render.make_screen_buffer(target_width, target_height)
-	apply_surface_background(renderer)
+	apply_surface_theme(renderer)
 }
 
-apply_surface_background :: proc(renderer: ^Renderer) {
-	r, g, b := render.renderer_config_background(renderer.config)
-	render.screen_set_background(&renderer.surface, r, g, b)
+apply_surface_theme :: proc(renderer: ^Renderer) {
+	bg_r, bg_g, bg_b := render.renderer_config_background(renderer.config)
+	render.screen_set_background(&renderer.surface, bg_r, bg_g, bg_b)
+	fg_r, fg_g, fg_b := render.renderer_config_foreground(renderer.config)
+	render.screen_set_foreground(&renderer.surface, fg_r, fg_g, fg_b)
+	render.screen_set_palette(&renderer.surface, renderer.config.palette)
 }
 
 present :: proc(renderer: ^Renderer) {

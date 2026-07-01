@@ -91,6 +91,9 @@ foreign libvterm {
 @(default_calling_convention = "c", link_prefix = "vterm_state_")
 foreign libvterm {
 	get_cursorpos :: proc(state: ^VTermState, cursorpos: ^VTermPos) ---
+	@(link_name = "vterm_state_set_default_colors") set_state_default_colors :: proc(state: ^VTermState, default_fg: ^VTermColor, default_bg: ^VTermColor) ---
+	@(link_name = "vterm_state_set_palette_color") set_palette_color :: proc(state: ^VTermState, index: c.int, color: ^VTermColor) ---
+	@(link_name = "vterm_state_set_bold_highbright") set_bold_highbright :: proc(state: ^VTermState, bold_is_highbright: c.int) ---
 }
 
 @(default_calling_convention = "c", link_prefix = "vterm_screen_")

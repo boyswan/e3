@@ -41,6 +41,8 @@ render_libvterm_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focuse
 	max_width := terminal_min_int(term.width, terminal_max_int(bounds.width - 2, 0))
 	max_height := terminal_min_int(term.height, terminal_max_int(bounds.height - 2, 0))
 
+	terminal_vterm_apply_default_colors(buffer, term.vterm_state, term.vterm_screen)
+
 	cursor := vt.VTermPos{row = -1, col = -1}
 	if focused && term.vterm_state != nil {
 		vt.get_cursorpos(term.vterm_state, &cursor)
@@ -84,10 +86,42 @@ render_libvterm_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focuse
 	}
 }
 
+terminal_vterm_apply_default_colors :: proc(buffer: ^Screen_Buffer, state: ^vt.VTermState, screen: ^vt.VTermScreen) {
+	default_fg := vt.VTermColor {
+		type = u8(vt.VTermColor_Type.RGB),
+		red = buffer.foreground_r,
+		green = buffer.foreground_g,
+		blue = buffer.foreground_b,
+	}
+	default_bg := vt.VTermColor {
+		type = u8(vt.VTermColor_Type.RGB),
+		red = buffer.background_r,
+		green = buffer.background_g,
+		blue = buffer.background_b,
+	}
+
+	if state != nil {
+		vt.set_state_default_colors(state, &default_fg, &default_bg)
+		vt.set_bold_highbright(state, 0)
+		for index in 0 ..< len(buffer.palette) {
+			palette_color := vt.VTermColor {
+				type = u8(vt.VTermColor_Type.RGB),
+				red = buffer.palette[index].r,
+				green = buffer.palette[index].g,
+				blue = buffer.palette[index].b,
+			}
+			vt.set_palette_color(state, c.int(index), &palette_color)
+		}
+	}
+	if screen != nil {
+		vt.set_default_colors(screen, &default_fg, &default_bg)
+	}
+}
+
 terminal_vterm_foreground_color :: proc(buffer: ^Screen_Buffer, screen: ^vt.VTermScreen, color: ^vt.VTermColor, emit_default: bool) -> (bool, u8, u8, u8) {
 	if vt.color_is_default_fg(color) {
 		if emit_default {
-			return true, 220, 220, 220
+			return true, buffer.foreground_r, buffer.foreground_g, buffer.foreground_b
 		}
 		return false, 0, 0, 0
 	}
@@ -112,19 +146,13 @@ terminal_vterm_background_color :: proc(buffer: ^Screen_Buffer, screen: ^vt.VTer
 	}
 	if vt.color_is_default_fg(color) {
 		if emit_default {
-			return true, 220, 220, 220
+			return true, buffer.foreground_r, buffer.foreground_g, buffer.foreground_b
 		}
 		return false, 0, 0, 0
 	}
 
 	converted := color^
 	vt.convert_color_to_rgb(screen, &converted)
-	// Some shells/apps or libvterm defaults can materialize the default
-	// background as explicit black. Treat that as transparent/default unless
-	// this cell is being materialized for reverse video/cursor rendering.
-	if !emit_default && converted.red == 0 && converted.green == 0 && converted.blue == 0 {
-		return false, 0, 0, 0
-	}
 	return true, converted.red, converted.green, converted.blue
 }
 

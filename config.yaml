@@ -8,7 +8,26 @@ font:
   size: 24
 
 window:
-  background: "#0a0a0c"
+  background: "#232326"
+  foreground: "#E1E1E1"
+
+palette:
+  black: "0x181a1f"
+  red: "0xe86671"
+  green: "0x98c379"
+  yellow: "0xe5c07b"
+  blue: "0x61afef"
+  magenta: "0xc678dd"
+  cyan: "0x56b6c2"
+  white: "0xabb2bf"
+  bright_black: "0x5c6370"
+  bright_red: "0xe86671"
+  bright_green: "0x98c379"
+  bright_yellow: "0xe5c07b"
+  bright_blue: "0x61afef"
+  bright_magenta: "0xc678dd"
+  bright_cyan: "0x56b6c2"
+  bright_white: "0xabb2bf"
 
 input:
   # alt/option/opt or super/gui/cmd/command/meta

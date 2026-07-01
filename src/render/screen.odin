@@ -38,6 +38,10 @@ Screen_Buffer :: struct {
 	background_r: u8,
 	background_g: u8,
 	background_b: u8,
+	foreground_r: u8,
+	foreground_g: u8,
+	foreground_b: u8,
+	palette:      [16]RGB_Color,
 }
 
 make_screen_buffer :: proc(width: int, height: int) -> Screen_Buffer {
@@ -48,7 +52,12 @@ make_screen_buffer :: proc(width: int, height: int) -> Screen_Buffer {
 		background_r = 10,
 		background_g = 10,
 		background_b = 12,
+		foreground_r = 220,
+		foreground_g = 220,
+		foreground_b = 220,
 	}
+	defaults := renderer_default_config()
+	buffer.palette = defaults.palette
 
 	screen_clear(&buffer)
 	return buffer
@@ -67,6 +76,16 @@ screen_set_background :: proc(buffer: ^Screen_Buffer, r: u8, g: u8, b: u8) {
 	buffer.background_r = r
 	buffer.background_g = g
 	buffer.background_b = b
+}
+
+screen_set_foreground :: proc(buffer: ^Screen_Buffer, r: u8, g: u8, b: u8) {
+	buffer.foreground_r = r
+	buffer.foreground_g = g
+	buffer.foreground_b = b
+}
+
+screen_set_palette :: proc(buffer: ^Screen_Buffer, palette: [16]RGB_Color) {
+	buffer.palette = palette
 }
 
 screen_clear :: proc(buffer: ^Screen_Buffer) {
@@ -186,6 +205,25 @@ screen_set_color :: proc(buffer: ^Screen_Buffer, x: int, y: int, color: Cell_Col
 	}
 
 	buffer.cells[index].color = color
+}
+
+screen_set_cell_background :: proc(buffer: ^Screen_Buffer, x: int, y: int, r: u8, g: u8, b: u8) {
+	index, ok := screen_index(buffer, x, y)
+	if !ok {
+		return
+	}
+
+	cell := &buffer.cells[index]
+	cell.bg_set = true
+	cell.bg_r = r
+	cell.bg_g = g
+	cell.bg_b = b
+}
+
+screen_set_range_background :: proc(buffer: ^Screen_Buffer, x: int, y: int, width: int, r: u8, g: u8, b: u8) {
+	for offset in 0 ..< width {
+		screen_set_cell_background(buffer, x + offset, y, r, g, b)
+	}
 }
 
 line_glyph :: proc(mask: u8) -> string {

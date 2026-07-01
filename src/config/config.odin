@@ -127,6 +127,11 @@ apply_config_value :: proc(section: string, key: string, value: string, config: 
 		return
 	}
 
+	if section == "palette" || section == "colors" || section == "colours" {
+		apply_palette_value(key, value, &config.renderer)
+		return
+	}
+
 	switch key {
 	case "font_path":
 		config.renderer.font_path = value
@@ -138,6 +143,8 @@ apply_config_value :: proc(section: string, key: string, value: string, config: 
 		}
 	case "background", "background_color":
 		apply_background_value(value, &config.renderer)
+	case "foreground", "foreground_color":
+		apply_foreground_value(value, &config.renderer)
 	case "mod", "mod_key":
 		config.mod_key = parse_mod_key(value, config.mod_key)
 	}
@@ -147,6 +154,8 @@ apply_window_value :: proc(key: string, value: string, config: ^render.Renderer_
 	switch key {
 	case "background", "background_color":
 		apply_background_value(value, config)
+	case "foreground", "foreground_color":
+		apply_foreground_value(value, config)
 	}
 }
 
@@ -209,6 +218,54 @@ apply_background_value :: proc(value: string, config: ^render.Renderer_Config) {
 	}
 }
 
+apply_foreground_value :: proc(value: string, config: ^render.Renderer_Config) {
+	if value == "none" {
+		config.foreground_set = false
+		return
+	}
+
+	if r, g, b, ok := parse_hex_color(value); ok {
+		config.foreground_set = true
+		config.foreground_r = r
+		config.foreground_g = g
+		config.foreground_b = b
+	}
+}
+
+apply_palette_value :: proc(key: string, value: string, config: ^render.Renderer_Config) {
+	index, ok := palette_index(key)
+	if !ok {
+		return
+	}
+
+	if r, g, b, color_ok := parse_hex_color(value); color_ok {
+		config.palette[index] = render.RGB_Color{r, g, b}
+	}
+}
+
+palette_index :: proc(key: string) -> (int, bool) {
+	switch key {
+	case "black", "color0", "colour0", "ansi_0": return 0, true
+	case "red", "color1", "colour1", "ansi_1": return 1, true
+	case "green", "color2", "colour2", "ansi_2": return 2, true
+	case "yellow", "color3", "colour3", "ansi_3": return 3, true
+	case "blue", "color4", "colour4", "ansi_4": return 4, true
+	case "magenta", "purple", "color5", "colour5", "ansi_5": return 5, true
+	case "cyan", "color6", "colour6", "ansi_6": return 6, true
+	case "white", "color7", "colour7", "ansi_7": return 7, true
+	case "bright_black", "bright-black", "color8", "colour8", "ansi_8": return 8, true
+	case "bright_red", "bright-red", "color9", "colour9", "ansi_9": return 9, true
+	case "bright_green", "bright-green", "color10", "colour10", "ansi_10": return 10, true
+	case "bright_yellow", "bright-yellow", "color11", "colour11", "ansi_11": return 11, true
+	case "bright_blue", "bright-blue", "color12", "colour12", "ansi_12": return 12, true
+	case "bright_magenta", "bright-magenta", "bright_purple", "bright-purple", "color13", "colour13", "ansi_13": return 13, true
+	case "bright_cyan", "bright-cyan", "color14", "colour14", "ansi_14": return 14, true
+	case "bright_white", "bright-white", "color15", "colour15", "ansi_15": return 15, true
+	}
+
+	return 0, false
+}
+
 clean_value :: proc(value: string) -> string {
 	trimmed := strings.trim_space(value)
 	if len(trimmed) >= 2 {
@@ -261,6 +318,12 @@ parse_hex_color :: proc(value: string) -> (u8, u8, u8, bool) {
 		red, red_ok := parse_hex_byte(color[1:3])
 		green, green_ok := parse_hex_byte(color[3:5])
 		blue, blue_ok := parse_hex_byte(color[5:7])
+		return red, green, blue, red_ok && green_ok && blue_ok
+	}
+	if len(color) == 8 && color[:2] == "0x" {
+		red, red_ok := parse_hex_byte(color[2:4])
+		green, green_ok := parse_hex_byte(color[4:6])
+		blue, blue_ok := parse_hex_byte(color[6:8])
 		return red, green, blue, red_ok && green_ok && blue_ok
 	}
 	return 0, 0, 0, false
