@@ -10,6 +10,18 @@ VTerm :: struct {}
 VTermState :: struct {}
 VTermScreen :: struct {}
 
+VTermScreenCallbacks :: struct {
+	damage:      proc "c" (rect: VTermRect, user: rawptr) -> c.int,
+	moverect:    proc "c" (dest: VTermRect, src: VTermRect, user: rawptr) -> c.int,
+	movecursor:  proc "c" (pos: VTermPos, oldpos: VTermPos, visible: c.int, user: rawptr) -> c.int,
+	settermprop: proc "c" (prop: c.int, val: rawptr, user: rawptr) -> c.int,
+	bell:        proc "c" (user: rawptr) -> c.int,
+	resize:      proc "c" (rows: c.int, cols: c.int, user: rawptr) -> c.int,
+	sb_pushline: proc "c" (cols: c.int, cells: [^]VTermScreenCell, user: rawptr) -> c.int,
+	sb_popline:  proc "c" (cols: c.int, cells: [^]VTermScreenCell, user: rawptr) -> c.int,
+	sb_clear:    proc "c" (user: rawptr) -> c.int,
+}
+
 VTermPos :: struct {
 	row: c.int,
 	col: c.int,
@@ -104,6 +116,8 @@ foreign libvterm {
 	get_cell :: proc(screen: ^VTermScreen, pos: VTermPos, cell: ^VTermScreenCell) -> c.int ---
 	convert_color_to_rgb :: proc(screen: ^VTermScreen, color: ^VTermColor) ---
 	set_default_colors :: proc(screen: ^VTermScreen, default_fg: ^VTermColor, default_bg: ^VTermColor) ---
+	set_callbacks :: proc(screen: ^VTermScreen, callbacks: ^VTermScreenCallbacks, user: rawptr) ---
+	enable_altscreen :: proc(screen: ^VTermScreen, altscreen: c.int) ---
 }
 
 color_is_indexed :: proc(color: ^VTermColor) -> bool {

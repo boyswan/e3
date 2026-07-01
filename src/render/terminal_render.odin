@@ -48,42 +48,68 @@ render_libvterm_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focuse
 		vt.get_cursorpos(term.vterm_state, &cursor)
 	}
 
+	scrollback_lines := 0
+	if term.scrollback_cols > 0 {
+		scrollback_lines = len(term.scrollback) / term.scrollback_cols
+	}
+	scroll_offset := terminal_min_int(term.scroll_offset, scrollback_lines)
+	total_rows := scrollback_lines + term.height
+	start_row := terminal_max_int(total_rows - max_height - scroll_offset, 0)
+
 	for y in 0 ..< max_height {
+		logical_row := start_row + y
 		for x in 0 ..< max_width {
 			cell: vt.VTermScreenCell
-			ok := vt.get_cell(term.vterm_screen, vt.VTermPos{row = c.int(y), col = c.int(x)}, &cell)
-			if ok == 0 {
-				continue
+			cell_ok := false
+			cursor_here := false
+
+			if logical_row < scrollback_lines {
+				if x < term.scrollback_cols {
+					cell = term.scrollback[logical_row * term.scrollback_cols + x]
+					cell_ok = true
+				}
+			} else {
+				screen_row := logical_row - scrollback_lines
+				ok := vt.get_cell(term.vterm_screen, vt.VTermPos{row = c.int(screen_row), col = c.int(x)}, &cell)
+				cell_ok = ok != 0
+				cursor_here = cursor.row == c.int(screen_row) && cursor.col == c.int(x)
 			}
 
-			glyph := terminal_vterm_glyph(cell.chars[0])
-			bold := vt.cell_is_bold(&cell)
-			fg := cell.fg
-			bg := cell.bg
-			emit_defaults := false
-			if vt.cell_is_reverse(&cell) || (cursor.row == c.int(y) && cursor.col == c.int(x)) {
-				fg, bg = bg, fg
-				emit_defaults = true
+			if !cell_ok {
+				continue
 			}
-			fg_set, fg_r, fg_g, fg_b := terminal_vterm_foreground_color(buffer, term.vterm_screen, &fg, emit_defaults)
-			bg_set, bg_r, bg_g, bg_b := terminal_vterm_background_color(buffer, term.vterm_screen, &bg, emit_defaults)
-			screen_put_terminal_rune(
-				buffer,
-				start_x + x,
-				start_y + y,
-				glyph,
-				bold,
-				fg_set,
-				fg_r,
-				fg_g,
-				fg_b,
-				bg_set,
-				bg_r,
-				bg_g,
-				bg_b,
-			)
+			render_vterm_cell(buffer, term.vterm_screen, &cell, start_x + x, start_y + y, cursor_here)
 		}
 	}
+}
+
+render_vterm_cell :: proc(buffer: ^Screen_Buffer, screen: ^vt.VTermScreen, cell: ^vt.VTermScreenCell, x: int, y: int, cursor_here := false) {
+	glyph := terminal_vterm_glyph(cell.chars[0])
+	bold := vt.cell_is_bold(cell)
+	fg := cell.fg
+	bg := cell.bg
+	emit_defaults := false
+	if vt.cell_is_reverse(cell) || cursor_here {
+		fg, bg = bg, fg
+		emit_defaults = true
+	}
+	fg_set, fg_r, fg_g, fg_b := terminal_vterm_foreground_color(buffer, screen, &fg, emit_defaults)
+	bg_set, bg_r, bg_g, bg_b := terminal_vterm_background_color(buffer, screen, &bg, emit_defaults)
+	screen_put_terminal_rune(
+		buffer,
+		x,
+		y,
+		glyph,
+		bold,
+		fg_set,
+		fg_r,
+		fg_g,
+		fg_b,
+		bg_set,
+		bg_r,
+		bg_g,
+		bg_b,
+	)
 }
 
 terminal_vterm_apply_default_colors :: proc(buffer: ^Screen_Buffer, state: ^vt.VTermState, screen: ^vt.VTermScreen) {

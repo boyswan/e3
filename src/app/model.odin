@@ -19,6 +19,11 @@ Terminal_Handle :: struct {
 	vterm_state:  ^vt.VTermState,
 	vterm_screen: ^vt.VTermScreen,
 
+	scrollback:       [dynamic]vt.VTermScreenCell,
+	scrollback_cols:  int,
+	scroll_offset:    int,
+	max_scrollback:   int,
+
 	cursor_x: int,
 	cursor_y: int,
 	cells:              []byte,

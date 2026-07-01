@@ -22,6 +22,13 @@ read_input_action :: proc(state: ^State, surface: ^render.Screen_Buffer, mode: i
 			handle_mouse_motion(state, surface, event.motion)
 		case .MOUSE_BUTTON_UP:
 			handle_mouse_button_up(state, surface, event.button)
+		case .MOUSE_WHEEL:
+			if mode == .Normal {
+				lines := int(event.wheel.y) * 3
+				if lines != 0 {
+					return input.Action{kind = .Command, command = domain.command_scroll_pane(lines)}
+				}
+			}
 		case .TEXT_INPUT:
 			if mode == .Normal {
 				action := cstring_input_action(event.text.text)
@@ -74,6 +81,12 @@ key_action :: proc(state: ^State, surface: ^render.Screen_Buffer, mode: input.In
 	}
 
 	if mod_key_pressed(event.mod, mod_key) {
+		if event.key == sdl3.K_PAGEUP {
+			return input.Action{kind = .Command, command = domain.command_scroll_pane(10)}
+		}
+		if event.key == sdl3.K_PAGEDOWN {
+			return input.Action{kind = .Command, command = domain.command_scroll_pane(-10)}
+		}
 		return mod_key_action(event.key, shift, bindings)
 	}
 

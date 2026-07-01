@@ -1,6 +1,7 @@
 package app
 
 import "core:c"
+import "base:runtime"
 import vt "../terminal"
 import posix "core:sys/posix"
 
@@ -27,6 +28,21 @@ Pty_Winsize :: struct {
 	col:    u16,
 	xpixel: u16,
 	ypixel: u16,
+}
+
+MAX_SCROLLBACK_LINES :: 5000
+
+terminal_screen_callbacks: vt.VTermScreenCallbacks
+terminal_screen_callbacks_initialized := false
+
+terminal_ensure_screen_callbacks :: proc() {
+	if terminal_screen_callbacks_initialized {
+		return
+	}
+	terminal_screen_callbacks.sb_pushline = terminal_vterm_sb_pushline
+	terminal_screen_callbacks.sb_popline = nil
+	terminal_screen_callbacks.sb_clear = terminal_vterm_sb_clear
+	terminal_screen_callbacks_initialized = true
 }
 
 terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) -> bool {
@@ -112,6 +128,9 @@ terminal_resize_libvterm :: proc(term: ^Terminal_Handle, width: int, height: int
 		term.vterm_state = vt.obtain_state(term.vterm)
 		term.vterm_screen = vt.obtain_screen(term.vterm)
 		if term.vterm_screen != nil {
+			terminal_ensure_screen_callbacks()
+			vt.set_callbacks(term.vterm_screen, &terminal_screen_callbacks, rawptr(term))
+			vt.enable_altscreen(term.vterm_screen, 1)
 			vt.set_damage_merge(term.vterm_screen, .Screen)
 			vt.reset(term.vterm_screen, 1)
 		}
@@ -146,6 +165,9 @@ terminal_destroy :: proc(term: ^Terminal_Handle) {
 	}
 	if term.cells != nil {
 		delete(term.cells)
+	}
+	if term.scrollback != nil {
+		delete(term.scrollback)
 	}
 	if term.vterm != nil {
 		vt.free(term.vterm)
@@ -201,6 +223,9 @@ terminal_write_input :: proc(term: ^Terminal_Handle, data: []byte) -> bool {
 }
 
 terminal_write_output :: proc(term: ^Terminal_Handle, data: []byte) {
+	if len(data) > 0 {
+		term.scroll_offset = 0
+	}
 	if term.backend == .Libvterm {
 		terminal_write_libvterm_output(term, data)
 		return
@@ -700,4 +725,111 @@ terminal_max_int :: proc(a: int, b: int) -> int {
 		return a
 	}
 	return b
+}
+
+terminal_vterm_sb_pushline :: proc "c" (cols: c.int, cells: [^]vt.VTermScreenCell, user: rawptr) -> c.int {
+	context = runtime.default_context()
+	term := (^Terminal_Handle)(user)
+	if term == nil || cols <= 0 {
+		return 0
+	}
+
+	terminal_prepare_scrollback(term, int(cols))
+	for index in 0 ..< int(cols) {
+		append(&term.scrollback, cells[index])
+	}
+	terminal_trim_scrollback(term)
+	return 1
+}
+
+terminal_vterm_sb_popline :: proc "c" (cols: c.int, cells: [^]vt.VTermScreenCell, user: rawptr) -> c.int {
+	context = runtime.default_context()
+	term := (^Terminal_Handle)(user)
+	if term == nil || cols <= 0 || term.scrollback_cols != int(cols) {
+		return 0
+	}
+	line_count := terminal_scrollback_line_count(term)
+	if line_count <= 0 {
+		return 0
+	}
+
+	start := (line_count - 1) * term.scrollback_cols
+	for index in 0 ..< term.scrollback_cols {
+		cells[index] = term.scrollback[start + index]
+	}
+	for index := 0; index < term.scrollback_cols; index += 1 {
+		pop(&term.scrollback)
+	}
+	return 1
+}
+
+terminal_vterm_sb_clear :: proc "c" (user: rawptr) -> c.int {
+	context = runtime.default_context()
+	term := (^Terminal_Handle)(user)
+	if term == nil {
+		return 0
+	}
+	if term.scrollback != nil {
+		clear(&term.scrollback)
+	}
+	term.scroll_offset = 0
+	return 1
+}
+
+terminal_prepare_scrollback :: proc(term: ^Terminal_Handle, cols: int) {
+	if term.scrollback_cols != cols {
+		if term.scrollback != nil {
+			clear(&term.scrollback)
+		}
+		term.scrollback_cols = cols
+		term.scroll_offset = 0
+	}
+	if term.max_scrollback <= 0 {
+		term.max_scrollback = MAX_SCROLLBACK_LINES
+	}
+}
+
+terminal_trim_scrollback :: proc(term: ^Terminal_Handle) {
+	if term.scrollback_cols <= 0 {
+		return
+	}
+	for terminal_scrollback_line_count(term) > term.max_scrollback {
+		for index in 0 ..< term.scrollback_cols {
+			ordered_remove(&term.scrollback, 0)
+		}
+	}
+}
+
+terminal_scrollback_line_count :: proc(term: ^Terminal_Handle) -> int {
+	if term == nil || term.scrollback_cols <= 0 {
+		return 0
+	}
+	return len(term.scrollback) / term.scrollback_cols
+}
+
+terminal_scroll_view :: proc(term: ^Terminal_Handle, lines: int) {
+	if term == nil || lines == 0 {
+		return
+	}
+	max_offset := terminal_scrollback_line_count(term)
+	term.scroll_offset += lines
+	if term.scroll_offset < 0 {
+		term.scroll_offset = 0
+	}
+	if term.scroll_offset > max_offset {
+		term.scroll_offset = max_offset
+	}
+}
+
+scroll_focused_terminal :: proc(app: ^App, lines: int) -> bool {
+	workspace := active_workspace(app)
+	if workspace == nil || workspace.root == nil || lines == 0 {
+		return false
+	}
+	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+	if focused == nil || focused.pane == nil {
+		return false
+	}
+	terminal_scroll_view(&focused.pane.terminal, lines)
+	return true
 }
