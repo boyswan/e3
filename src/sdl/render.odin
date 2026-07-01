@@ -286,8 +286,12 @@ draw_cell_foreground :: proc(state: ^State, surface: ^render.Screen_Buffer, x: i
 	bg_r, bg_g, bg_b := cell_background(surface, cell)
 	cell_y := draw_cell_y(state, surface, y, output_pixel_height)
 
-	if cell.line_mask != 0 {
-		draw_line_cell(state, surface, x, y, fg_r, fg_g, fg_b)
+	line_mask := cell.line_mask
+	if line_mask == 0 {
+		line_mask = box_drawing_line_mask(cell_rune(cell))
+	}
+	if line_mask != 0 {
+		draw_line_mask_cell(state, surface, x, y, line_mask, fg_r, fg_g, fg_b, offset_x, offset_y, output_pixel_height)
 		return
 	}
 
@@ -496,9 +500,9 @@ encode_utf8 :: proc(value: u32, buffer: []u8) -> int {
 	return 0
 }
 
-draw_line_cell :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y: int, r: int, g: int, b: int) {
-	cell_x := f32(x * state.cell_width)
-	cell_y := f32(y * state.cell_height)
+draw_line_mask_cell :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y: int, line_mask: u8, r: int, g: int, b: int, offset_x := 0, offset_y := 0, output_pixel_height := 0) {
+	cell_x := f32(x * state.cell_width + offset_x)
+	cell_y := f32(draw_cell_y(state, surface, y, output_pixel_height) + offset_y)
 	center_x := cell_x + f32(state.cell_width / 2)
 	center_y := cell_y + f32(state.cell_height / 2)
 	line_width: f32 = 1
@@ -506,23 +510,51 @@ draw_line_cell :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y:
 
 	sdl3.SetRenderDrawColor(state.renderer, u8(r), u8(g), u8(b), 255)
 
-	cell := surface.cells[y * surface.width + x]
-	if cell.line_mask & render.LINE_LEFT != 0 {
+	if line_mask & render.LINE_LEFT != 0 {
 		rect := sdl3.FRect{x = cell_x, y = center_y - half_line, w = center_x - cell_x, h = line_width}
 		sdl3.RenderFillRect(state.renderer, &rect)
 	}
-	if cell.line_mask & render.LINE_RIGHT != 0 {
+	if line_mask & render.LINE_RIGHT != 0 {
 		rect := sdl3.FRect{x = center_x, y = center_y - half_line, w = cell_x + f32(state.cell_width) - center_x, h = line_width}
 		sdl3.RenderFillRect(state.renderer, &rect)
 	}
-	if cell.line_mask & render.LINE_UP != 0 {
+	if line_mask & render.LINE_UP != 0 {
 		rect := sdl3.FRect{x = center_x - half_line, y = cell_y, w = line_width, h = center_y - cell_y}
 		sdl3.RenderFillRect(state.renderer, &rect)
 	}
-	if cell.line_mask & render.LINE_DOWN != 0 {
+	if line_mask & render.LINE_DOWN != 0 {
 		rect := sdl3.FRect{x = center_x - half_line, y = center_y, w = line_width, h = cell_y + f32(state.cell_height) - center_y}
 		sdl3.RenderFillRect(state.renderer, &rect)
 	}
+}
+
+box_drawing_line_mask :: proc(rune: u32) -> u8 {
+	switch rune {
+	case '│', '┃', '║':
+		return render.LINE_UP | render.LINE_DOWN
+	case '─', '━', '═':
+		return render.LINE_LEFT | render.LINE_RIGHT
+	case '┌', '╭', '╔':
+		return render.LINE_RIGHT | render.LINE_DOWN
+	case '┐', '╮', '╗':
+		return render.LINE_LEFT | render.LINE_DOWN
+	case '└', '╰', '╚':
+		return render.LINE_RIGHT | render.LINE_UP
+	case '┘', '╯', '╝':
+		return render.LINE_LEFT | render.LINE_UP
+	case '├', '┣', '╠':
+		return render.LINE_UP | render.LINE_DOWN | render.LINE_RIGHT
+	case '┤', '┫', '╣':
+		return render.LINE_UP | render.LINE_DOWN | render.LINE_LEFT
+	case '┬', '┳', '╦':
+		return render.LINE_LEFT | render.LINE_RIGHT | render.LINE_DOWN
+	case '┴', '┻', '╩':
+		return render.LINE_LEFT | render.LINE_RIGHT | render.LINE_UP
+	case '┼', '╋', '╬':
+		return render.LINE_LEFT | render.LINE_RIGHT | render.LINE_UP | render.LINE_DOWN
+	}
+
+	return 0
 }
 
 cell_color :: proc(surface: ^render.Screen_Buffer, cell: render.Cell) -> (int, int, int) {
