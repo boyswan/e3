@@ -4,10 +4,10 @@ import "core:c"
 import app "../app"
 import vt "../terminal"
 
-render_terminal_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focused := false) {
+render_terminal_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focused := false, inset := 1) {
 	term := &pane.terminal
 	if term.backend == .Libvterm {
-		render_libvterm_contents(buffer, pane, focused)
+		render_libvterm_contents(buffer, pane, focused, inset)
 		return
 	}
 
@@ -16,10 +16,10 @@ render_terminal_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focuse
 	}
 
 	bounds := pane.bounds
-	start_x := bounds.x + 1
-	start_y := bounds.y + 1
-	max_width := terminal_min_int(term.width, terminal_max_int(bounds.width - 2, 0))
-	max_height := terminal_min_int(term.height, terminal_max_int(bounds.height - 2, 0))
+	start_x := bounds.x + inset
+	start_y := bounds.y + inset
+	max_width := terminal_min_int(term.width, terminal_max_int(bounds.width - inset * 2, 0))
+	max_height := terminal_min_int(term.height, terminal_max_int(bounds.height - inset * 2, 0))
 
 	for y in 0 ..< max_height {
 		for x in 0 ..< max_width {
@@ -29,17 +29,17 @@ render_terminal_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focuse
 	}
 }
 
-render_libvterm_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focused: bool) {
+render_libvterm_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focused: bool, inset := 1) {
 	term := &pane.terminal
 	if !term.active || term.vterm_screen == nil {
 		return
 	}
 
 	bounds := pane.bounds
-	start_x := bounds.x + 1
-	start_y := bounds.y + 1
-	max_width := terminal_min_int(term.width, terminal_max_int(bounds.width - 2, 0))
-	max_height := terminal_min_int(term.height, terminal_max_int(bounds.height - 2, 0))
+	start_x := bounds.x + inset
+	start_y := bounds.y + inset
+	max_width := terminal_min_int(term.width, terminal_max_int(bounds.width - inset * 2, 0))
+	max_height := terminal_min_int(term.height, terminal_max_int(bounds.height - inset * 2, 0))
 
 	terminal_vterm_apply_default_colors(buffer, term.vterm_state, term.vterm_screen)
 

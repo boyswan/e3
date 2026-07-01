@@ -122,6 +122,16 @@ apply_config_value :: proc(section: string, key: string, value: string, config: 
 		return
 	}
 
+	if section == "pane" || section == "panes" {
+		apply_pane_value(key, value, &config.renderer)
+		return
+	}
+
+	if section == "bar" || section == "workspace_bar" {
+		apply_bar_value(key, value, &config.renderer)
+		return
+	}
+
 	if section == "input" || section == "keys" {
 		apply_input_value(key, value, config)
 		return
@@ -156,6 +166,56 @@ apply_window_value :: proc(key: string, value: string, config: ^render.Renderer_
 		apply_background_value(value, config)
 	case "foreground", "foreground_color":
 		apply_foreground_value(value, config)
+	}
+}
+
+apply_pane_value :: proc(key: string, value: string, config: ^render.Renderer_Config) {
+	switch key {
+	case "native_padding", "native_padding_px", "native_pane_padding", "native_pane_padding_px":
+		if padding, ok := parse_int(value); ok && padding >= 0 {
+			config.native_pane_padding_px = padding
+		}
+	case "native_border", "native_border_px", "native_pane_border", "native_pane_border_px":
+		if border, ok := parse_int(value); ok && border >= 0 {
+			config.native_pane_border_px = border
+		}
+	}
+}
+
+apply_bar_value :: proc(key: string, value: string, config: ^render.Renderer_Config) {
+	switch key {
+	case "background":
+		if r, g, b, ok := parse_hex_color(value); ok {
+			config.bar.background = render.RGB_Color{r, g, b}
+		}
+	case "statusline":
+		if r, g, b, ok := parse_hex_color(value); ok {
+			config.bar.statusline = render.RGB_Color{r, g, b}
+		}
+	case "separator":
+		if r, g, b, ok := parse_hex_color(value); ok {
+			config.bar.separator = render.RGB_Color{r, g, b}
+		}
+	case "focused_workspace":
+		if colors, ok := parse_workspace_button_colors(value); ok {
+			config.bar.focused_workspace = colors
+		}
+	case "active_workspace":
+		if colors, ok := parse_workspace_button_colors(value); ok {
+			config.bar.active_workspace = colors
+		}
+	case "inactive_workspace":
+		if colors, ok := parse_workspace_button_colors(value); ok {
+			config.bar.inactive_workspace = colors
+		}
+	case "urgent_workspace":
+		if colors, ok := parse_workspace_button_colors(value); ok {
+			config.bar.urgent_workspace = colors
+		}
+	case "binding_mode":
+		if colors, ok := parse_workspace_button_colors(value); ok {
+			config.bar.binding_mode = colors
+		}
 	}
 }
 
@@ -322,6 +382,55 @@ parse_int :: proc(value: string) -> (int, bool) {
 		result = result * 10 + int(value[index] - '0')
 	}
 	return result, true
+}
+
+parse_workspace_button_colors :: proc(value: string) -> (render.Workspace_Button_Colors, bool) {
+	first, rest, ok := next_word(value)
+	if !ok {
+		return render.Workspace_Button_Colors{}, false
+	}
+	second, rest2, ok2 := next_word(rest)
+	if !ok2 {
+		return render.Workspace_Button_Colors{}, false
+	}
+	third, _, ok3 := next_word(rest2)
+	if !ok3 {
+		return render.Workspace_Button_Colors{}, false
+	}
+
+	border_r, border_g, border_b, border_ok := parse_hex_color(first)
+	bg_r, bg_g, bg_b, bg_ok := parse_hex_color(second)
+	text_r, text_g, text_b, text_ok := parse_hex_color(third)
+	if !(border_ok && bg_ok && text_ok) {
+		return render.Workspace_Button_Colors{}, false
+	}
+
+	return render.Workspace_Button_Colors {
+		border = render.RGB_Color{border_r, border_g, border_b},
+		background = render.RGB_Color{bg_r, bg_g, bg_b},
+		text = render.RGB_Color{text_r, text_g, text_b},
+	}, true
+}
+
+next_word :: proc(value: string) -> (string, string, bool) {
+	start := 0
+	for start < len(value) && is_space(value[start]) {
+		start += 1
+	}
+	if start >= len(value) {
+		return "", "", false
+	}
+
+	end := start
+	for end < len(value) && !is_space(value[end]) {
+		end += 1
+	}
+
+	return value[start:end], value[end:], true
+}
+
+is_space :: proc(value: byte) -> bool {
+	return value == ' ' || value == '\t'
 }
 
 parse_hex_color :: proc(value: string) -> (u8, u8, u8, bool) {

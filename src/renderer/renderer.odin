@@ -1,5 +1,7 @@
 package renderer
 
+import domain "../app"
+import input "../input"
 import render "../render"
 import native "../sdl"
 import tty "../tty"
@@ -85,14 +87,15 @@ apply_surface_theme :: proc(renderer: ^Renderer) {
 	fg_r, fg_g, fg_b := render.renderer_config_foreground(renderer.config)
 	render.screen_set_foreground(&renderer.surface, fg_r, fg_g, fg_b)
 	render.screen_set_palette(&renderer.surface, renderer.config.palette)
+	render.screen_set_bar_colors(&renderer.surface, renderer.config.bar)
 }
 
-present :: proc(renderer: ^Renderer) {
+present :: proc(renderer: ^Renderer, state: ^domain.App = nil, mode := input.Input_Mode.Normal) {
 	switch renderer.kind {
 	case .TTY:
 		tty.present(&renderer.surface)
 	case .SDL3:
-		native.present(&renderer.sdl, &renderer.surface, renderer.config)
+		native.present(&renderer.sdl, &renderer.surface, renderer.config, state, mode)
 	}
 }
 
@@ -110,4 +113,18 @@ width :: proc(renderer: ^Renderer) -> int {
 
 height :: proc(renderer: ^Renderer) -> int {
 	return renderer.surface.height
+}
+
+cell_width :: proc(renderer: ^Renderer) -> int {
+	if renderer.kind == .SDL3 {
+		return renderer.sdl.cell_width
+	}
+	return 1
+}
+
+cell_height :: proc(renderer: ^Renderer) -> int {
+	if renderer.kind == .SDL3 {
+		return renderer.sdl.cell_height
+	}
+	return 1
 }

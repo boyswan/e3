@@ -602,20 +602,26 @@ terminal_scroll_up :: proc(term: ^Terminal_Handle) {
 	}
 }
 
-sync_pane_terminals :: proc(node: ^Node) {
+sync_pane_terminals :: proc(node: ^Node, inset := 1, extra_width_padding := 0, extra_height_padding := 0) {
 	if node == nil {
 		return
 	}
 
+	terminal_width_padding := inset * 2 + extra_width_padding
+	terminal_height_padding := inset * 2 + extra_height_padding
 	switch node.kind {
 	case .Pane:
 		if node.pane != nil {
 			bounds := node.pane.bounds
-			terminal_spawn_shell(&node.pane.terminal, terminal_max_int(bounds.width - 2, 1), terminal_max_int(bounds.height - 2, 1))
+			terminal_spawn_shell(
+				&node.pane.terminal,
+				terminal_max_int(bounds.width - terminal_width_padding, 1),
+				terminal_max_int(bounds.height - terminal_height_padding, 1),
+			)
 		}
 	case .Split_Horizontal, .Split_Vertical:
 		for child in node.children {
-			sync_pane_terminals(child)
+			sync_pane_terminals(child, inset, extra_width_padding, extra_height_padding)
 		}
 	case .Stacked, .Tabbed:
 		if len(node.children) == 0 {
@@ -625,7 +631,7 @@ sync_pane_terminals :: proc(node: ^Node) {
 		if index < 0 || index >= len(node.children) {
 			index = 0
 		}
-		sync_pane_terminals(node.children[index])
+		sync_pane_terminals(node.children[index], inset, extra_width_padding, extra_height_padding)
 	}
 }
 

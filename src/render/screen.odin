@@ -44,6 +44,7 @@ Screen_Buffer :: struct {
 	foreground_g: u8,
 	foreground_b: u8,
 	palette:      [16]RGB_Color,
+	bar:          Bar_Colors,
 }
 
 make_screen_buffer :: proc(width: int, height: int) -> Screen_Buffer {
@@ -60,6 +61,7 @@ make_screen_buffer :: proc(width: int, height: int) -> Screen_Buffer {
 	}
 	defaults := renderer_default_config()
 	buffer.palette = defaults.palette
+	buffer.bar = defaults.bar
 
 	screen_clear(&buffer)
 	return buffer
@@ -90,6 +92,10 @@ screen_set_palette :: proc(buffer: ^Screen_Buffer, palette: [16]RGB_Color) {
 	buffer.palette = palette
 }
 
+screen_set_bar_colors :: proc(buffer: ^Screen_Buffer, bar: Bar_Colors) {
+	buffer.bar = bar
+}
+
 screen_clear :: proc(buffer: ^Screen_Buffer) {
 	for index in 0 ..< len(buffer.cells) {
 		buffer.cells[index] = Cell{glyph = " ", color = .Default}
@@ -111,6 +117,27 @@ screen_put :: proc(buffer: ^Screen_Buffer, x: int, y: int, glyph: string, bold :
 	}
 
 	buffer.cells[index] = Cell{glyph = glyph, bold = bold, color = color}
+}
+
+screen_put_rgb :: proc(buffer: ^Screen_Buffer, x: int, y: int, glyph: string, fg: RGB_Color, bg: RGB_Color, bold := false) {
+	index, ok := screen_index(buffer, x, y)
+	if !ok {
+		return
+	}
+
+	buffer.cells[index] = Cell {
+		glyph = glyph,
+		bold = bold,
+		color = .Default,
+		fg_set = true,
+		fg_r = fg.r,
+		fg_g = fg.g,
+		fg_b = fg.b,
+		bg_set = true,
+		bg_r = bg.r,
+		bg_g = bg.g,
+		bg_b = bg.b,
+	}
 }
 
 screen_put_terminal :: proc(

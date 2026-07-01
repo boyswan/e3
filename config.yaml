@@ -11,6 +11,24 @@ window:
   background: "#232326"
   foreground: "#E1E1E1"
 
+pane:
+  # SDL-only visual padding. Reserved for native pane layout work;
+  # terminal cells are not offset by it yet.
+  native_padding_px: 10
+  # SDL-only border thickness, measured in pixels.
+  native_border_px: 1
+
+bar:
+  # i3 default bar/workspace colors.
+  background: "#000000"
+  statusline: "#ffffff"
+  separator: "#666666"
+  focused_workspace: "#4c7899 #285577 #ffffff"
+  active_workspace: "#333333 #5f676a #ffffff"
+  inactive_workspace: "#333333 #222222 #888888"
+  urgent_workspace: "#2f343a #900000 #ffffff"
+  binding_mode: "#2f343a #900000 #ffffff"
+
 palette:
   black: "0x181a1f"
   red: "0xe86671"

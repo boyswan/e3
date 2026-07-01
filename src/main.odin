@@ -49,13 +49,24 @@ main :: proc() {
 		}
 		renderer.resize(&r, new_width, new_height)
 
+		terminal_width_padding := 0
+		terminal_height_padding := 0
+		if renderer_kind == .SDL3 {
+			content_inset := config.renderer.native_pane_padding_px + config.renderer.native_pane_border_px
+			terminal_width_padding = ceil_div(content_inset * 2, renderer.cell_width(&r))
+			terminal_height_padding = ceil_div(content_inset * 2, renderer.cell_height(&r))
+		}
+
 		render.render_app(
 			&r.surface,
 			&state,
 			domain.Rect{x = 0, y = 0, width = renderer.width(&r), height = renderer.height(&r)},
 			input_mode,
+			renderer_kind == .SDL3,
+			terminal_width_padding,
+			terminal_height_padding,
 		)
-		renderer.present(&r)
+		renderer.present(&r, &state, input_mode)
 
 		action := read_next_action(&r, input_mode, config.mod_key, config.bindings)
 		if action.kind == .None {
@@ -105,6 +116,13 @@ read_next_action :: proc(
 		native.wait(16)
 	}
 	return action
+}
+
+ceil_div :: proc(value: int, divisor: int) -> int {
+	if divisor <= 0 {
+		return 0
+	}
+	return (value + divisor - 1) / divisor
 }
 
 renderer_kind_from_args :: proc() -> renderer.Kind {

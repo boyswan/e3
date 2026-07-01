@@ -3,6 +3,7 @@ package sdl
 import "core:c"
 import "core:os"
 import "core:strings"
+import domain "../app"
 import input "../input"
 import render "../render"
 import sdl3 "vendor:sdl3"
@@ -40,6 +41,7 @@ State :: struct {
 	selection_start_y: int,
 	selection_end_x:   int,
 	selection_end_y:   int,
+	native_border_px: int,
 }
 
 make_state :: proc() -> State {
@@ -72,6 +74,7 @@ begin :: proc(state: ^State, config: render.Renderer_Config) -> bool {
 
 	state.window = window
 	state.renderer = sdl_renderer
+	state.native_border_px = config.native_pane_border_px
 	init_font(state, config)
 	_ = sdl3.StartTextInput(window)
 	return true
@@ -141,7 +144,7 @@ should_quit :: proc() -> bool {
 	return false
 }
 
-present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Renderer_Config) {
+present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Renderer_Config, app: ^domain.App = nil, mode := input.Input_Mode.Normal) {
 	if state.renderer == nil {
 		return
 	}
@@ -153,7 +156,11 @@ present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Re
 
 	output_width: c.int
 	output_height: c.int
+	output_pixel_width := 0
+	output_pixel_height := 0
 	if sdl3.GetRenderOutputSize(state.renderer, &output_width, &output_height) {
+		output_pixel_width = int(output_width)
+		output_pixel_height = int(output_height)
 		background := sdl3.FRect{x = 0, y = 0, w = f32(output_width), h = f32(output_height)}
 		sdl3.RenderFillRect(state.renderer, &background)
 	} else {
@@ -166,8 +173,26 @@ present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Re
 			if selection_contains(state, x, y) {
 				apply_selection_style(state, surface, &cell)
 			}
-			draw_cell(state, surface, x, y, cell)
+
+			offset_x, offset_y := native_cell_offset(state, config, app, x, y)
+			draw_cell_background(state, surface, x, y, cell, offset_x, offset_y, output_pixel_height)
 		}
+	}
+
+	for y in 0 ..< surface.height {
+		for x in 0 ..< surface.width {
+			cell := surface.cells[y * surface.width + x]
+			if selection_contains(state, x, y) {
+				apply_selection_style(state, surface, &cell)
+			}
+
+			offset_x, offset_y := native_cell_offset(state, config, app, x, y)
+			draw_cell_foreground(state, surface, x, y, cell, offset_x, offset_y, output_pixel_height)
+		}
+	}
+
+	if app != nil {
+		draw_native_chrome(state, surface, app, mode, output_pixel_width, output_pixel_height)
 	}
 
 	sdl3.RenderPresent(state.renderer)
@@ -219,23 +244,47 @@ apply_selection_style :: proc(state: ^State, surface: ^render.Screen_Buffer, cel
 	cell.bg_b = bg.b
 }
 
-draw_cell :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y: int, cell: render.Cell) {
+native_cell_offset :: proc(state: ^State, config: render.Renderer_Config, app: ^domain.App, x: int, y: int) -> (int, int) {
+	if app != nil && config.native_pane_padding_px > 0 {
+		_, ok := native_cell_pane_bounds(app, x, y)
+		if ok {
+			content_inset := max_int(config.native_pane_padding_px + state.native_border_px, 0)
+			return content_inset, content_inset
+		}
+	}
+	return 0, 0
+}
+
+draw_cell_y :: proc(state: ^State, surface: ^render.Screen_Buffer, y: int, output_pixel_height := 0) -> int {
+	cell_y := y * state.cell_height
+	if output_pixel_height > 0 && y == surface.height - 1 {
+		cell_y = max_int(output_pixel_height - state.cell_height, 0)
+	}
+	return cell_y
+}
+
+draw_cell_background :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y: int, cell: render.Cell, offset_x := 0, offset_y := 0, output_pixel_height := 0) {
+	bg_r, bg_g, bg_b := cell_background(surface, cell)
+	cell_y := draw_cell_y(state, surface, y, output_pixel_height)
+	rect := sdl3.FRect {
+		x = f32(x * state.cell_width + offset_x),
+		y = f32(cell_y + offset_y),
+		w = f32(state.cell_width),
+		h = f32(state.cell_height),
+	}
+	sdl3.SetRenderDrawColor(state.renderer, u8(bg_r), u8(bg_g), u8(bg_b), 255)
+	sdl3.RenderFillRect(state.renderer, &rect)
+}
+
+draw_cell_foreground :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y: int, cell: render.Cell, offset_x := 0, offset_y := 0, output_pixel_height := 0) {
 	fg_r, fg_g, fg_b := cell_color(surface, cell)
 	if cell.bold && !cell.fg_set {
 		fg_r = min_int(fg_r + 40, 255)
 		fg_g = min_int(fg_g + 40, 255)
 		fg_b = min_int(fg_b + 40, 255)
 	}
-
 	bg_r, bg_g, bg_b := cell_background(surface, cell)
-	rect := sdl3.FRect {
-		x = f32(x * state.cell_width),
-		y = f32(y * state.cell_height),
-		w = f32(state.cell_width),
-		h = f32(state.cell_height),
-	}
-	sdl3.SetRenderDrawColor(state.renderer, u8(bg_r), u8(bg_g), u8(bg_b), 255)
-	sdl3.RenderFillRect(state.renderer, &rect)
+	cell_y := draw_cell_y(state, surface, y, output_pixel_height)
 
 	if cell.line_mask != 0 {
 		draw_line_cell(state, surface, x, y, fg_r, fg_g, fg_b)
@@ -243,7 +292,7 @@ draw_cell :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y: int,
 	}
 
 	if state.font != nil {
-		draw_font_cell(state, x, y, cell, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b)
+		draw_font_cell(state, x, cell_y, cell, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b, offset_x, offset_y)
 		return
 	}
 
@@ -257,8 +306,8 @@ draw_cell :: proc(state: ^State, surface: ^render.Screen_Buffer, x: int, y: int,
 	sdl3.SetRenderDrawColor(state.renderer, u8(fg_r), u8(fg_g), u8(fg_b), 255)
 	_ = sdl3.SetRenderScale(state.renderer, state.text_scale, state.text_scale)
 
-	text_x := f32(x * state.cell_width) / state.text_scale
-	text_y := f32(y * state.cell_height + 2) / state.text_scale
+	text_x := f32(x * state.cell_width + offset_x) / state.text_scale
+	text_y := f32(cell_y + 2 + offset_y) / state.text_scale
 	sdl3.RenderDebugText(state.renderer, text_x, text_y, cstring(&buf[0]))
 	_ = sdl3.SetRenderScale(state.renderer, 1, 1)
 }
@@ -315,7 +364,7 @@ resolve_font_path :: proc(config: render.Renderer_Config) -> string {
 	return ""
 }
 
-draw_font_cell :: proc(state: ^State, x: int, y: int, cell: render.Cell, fg_r: int, fg_g: int, fg_b: int, bg_r: int, bg_g: int, bg_b: int) {
+draw_font_cell :: proc(state: ^State, x: int, cell_y: int, cell: render.Cell, fg_r: int, fg_g: int, fg_b: int, bg_r: int, bg_g: int, bg_b: int, offset_x := 0, offset_y := 0) {
 	rune := cell_rune(cell)
 	if rune == 0 || rune == ' ' {
 		return
@@ -327,8 +376,8 @@ draw_font_cell :: proc(state: ^State, x: int, y: int, cell: render.Cell, fg_r: i
 	}
 
 	dst := sdl3.FRect {
-		x = f32(x * state.cell_width),
-		y = f32(y * state.cell_height),
+		x = f32(x * state.cell_width + offset_x),
+		y = f32(cell_y + offset_y),
 		w = entry.width,
 		h = entry.height,
 	}
@@ -515,4 +564,214 @@ max_int :: proc(a: int, b: int) -> int {
 		return a
 	}
 	return b
+}
+
+draw_native_chrome :: proc(state: ^State, surface: ^render.Screen_Buffer, app: ^domain.App, mode: input.Input_Mode, output_pixel_width := 0, output_pixel_height := 0) {
+	workspace := domain.active_workspace(app)
+	if workspace == nil || workspace.root == nil {
+		return
+	}
+
+	draw_native_pane_borders(state, surface, workspace.root, workspace.focused_pane_id, mode, output_pixel_width, output_pixel_height)
+	draw_native_workspace_bar_borders(state, surface, app, output_pixel_height)
+}
+
+draw_native_pane_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, node: ^domain.Node, focused_pane_id: int, mode: input.Input_Mode, output_pixel_width := 0, output_pixel_height := 0) {
+	if node == nil {
+		return
+	}
+
+	switch node.kind {
+	case .Pane:
+		if node.pane == nil {
+			return
+		}
+
+		color := render.Cell_Color.Inactive
+		if node.pane.id == focused_pane_id {
+			color = .Focused
+			if mode == .Resize {
+				color = .Split_Hint
+			}
+		} else if node.parent != nil && len(node.parent.focus_order) > 0 && node.parent.focus_order[0] == node {
+			color = .Focused_Inactive
+		}
+
+		r, g, b := cell_color(surface, render.Cell{color = color})
+		draw_native_pane_border(state, surface, node.pane.bounds, r, g, b, output_pixel_width, output_pixel_height)
+	case .Split_Horizontal, .Split_Vertical:
+		for child in node.children {
+			draw_native_pane_borders(state, surface, child, focused_pane_id, mode, output_pixel_width, output_pixel_height)
+		}
+	case .Stacked, .Tabbed:
+		child := domain.descend_focused(node)
+		if child != nil {
+			draw_native_pane_borders(state, surface, child, focused_pane_id, mode, output_pixel_width, output_pixel_height)
+		}
+	}
+}
+
+draw_native_pane_border :: proc(state: ^State, surface: ^render.Screen_Buffer, bounds: domain.Rect, r: int, g: int, b: int, output_pixel_width := 0, output_pixel_height := 0) {
+	if bounds.width <= 0 || bounds.height <= 0 {
+		return
+	}
+
+	pane_x, pane_y, pane_w, pane_h := native_pane_pixel_rect(state, surface, bounds, output_pixel_width, output_pixel_height)
+	left := f32(pane_x)
+	top := f32(pane_y)
+	right := f32(pane_x + pane_w) - 1
+	bottom := f32(pane_y + pane_h) - 1
+	line_width := f32(max_int(state.native_border_px, 0))
+	if line_width <= 0 {
+		return
+	}
+
+	sdl3.SetRenderDrawColor(state.renderer, u8(r), u8(g), u8(b), 255)
+	top_rect := sdl3.FRect{x = left, y = top, w = right - left + 1, h = line_width}
+	bottom_rect := sdl3.FRect{x = left, y = bottom, w = right - left + 1, h = line_width}
+	left_rect := sdl3.FRect{x = left, y = top, w = line_width, h = bottom - top + 1}
+	right_rect := sdl3.FRect{x = right, y = top, w = line_width, h = bottom - top + 1}
+	sdl3.RenderFillRect(state.renderer, &top_rect)
+	sdl3.RenderFillRect(state.renderer, &bottom_rect)
+	sdl3.RenderFillRect(state.renderer, &left_rect)
+	sdl3.RenderFillRect(state.renderer, &right_rect)
+}
+
+native_cell_pane_bounds :: proc(app: ^domain.App, x: int, y: int) -> (domain.Rect, bool) {
+	workspace := domain.active_workspace(app)
+	if workspace == nil || workspace.root == nil {
+		return domain.Rect{}, false
+	}
+	return native_cell_pane_bounds_node(workspace.root, x, y)
+}
+
+native_cell_pane_bounds_node :: proc(node: ^domain.Node, x: int, y: int) -> (domain.Rect, bool) {
+	if node == nil {
+		return domain.Rect{}, false
+	}
+
+	switch node.kind {
+	case .Pane:
+		if node.pane == nil {
+			return domain.Rect{}, false
+		}
+		bounds := node.pane.bounds
+		if x >= bounds.x && x < bounds.x + bounds.width && y >= bounds.y && y < bounds.y + bounds.height {
+			return bounds, true
+		}
+	case .Split_Horizontal, .Split_Vertical:
+		for child in node.children {
+			bounds, ok := native_cell_pane_bounds_node(child, x, y)
+			if ok {
+				return bounds, true
+			}
+		}
+	case .Stacked, .Tabbed:
+		child := domain.descend_focused(node)
+		if child != nil {
+			return native_cell_pane_bounds_node(child, x, y)
+		}
+	}
+
+	return domain.Rect{}, false
+}
+
+draw_native_workspace_bar_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, app: ^domain.App, output_pixel_height := 0) {
+	if surface.height <= 0 {
+		return
+	}
+
+	output_width := surface.width * state.cell_width
+	if state.renderer != nil {
+		pixel_width: c.int
+		pixel_height: c.int
+		if sdl3.GetRenderOutputSize(state.renderer, &pixel_width, &pixel_height) {
+			output_width = int(pixel_width)
+		}
+	}
+
+	workspace := domain.active_workspace(app)
+	if workspace == nil {
+		return
+	}
+
+	bar_top := (surface.height - 1) * state.cell_height
+	if output_pixel_height > 0 {
+		bar_top = max_int(output_pixel_height - state.cell_height, 0)
+	}
+
+	separator := surface.bar.separator
+	sdl3.SetRenderDrawColor(state.renderer, separator.r, separator.g, separator.b, 255)
+	bar_line := sdl3.FRect{x = 0, y = f32(bar_top), w = f32(output_width), h = 1}
+	sdl3.RenderFillRect(state.renderer, &bar_line)
+
+	cursor_x := 0
+	for index in 0 ..< len(app.workspaces) {
+		workspace_button := &app.workspaces[index]
+		colors := surface.bar.inactive_workspace
+		if index == app.active_workspace_index {
+			colors = surface.bar.focused_workspace
+		}
+
+		button_width := (len(workspace_button.name) + 2) * state.cell_width
+		if button_width <= 0 {
+			continue
+		}
+
+		draw_native_rect_border(
+			state,
+			cursor_x * state.cell_width,
+			bar_top,
+			button_width,
+			state.cell_height,
+			colors.border,
+			1,
+		)
+		cursor_x += len(workspace_button.name) + 2
+	}
+}
+
+draw_native_rect_border :: proc(state: ^State, x: int, y: int, width: int, height: int, color: render.RGB_Color, thickness: int) {
+	if width <= 0 || height <= 0 || thickness <= 0 {
+		return
+	}
+
+	sdl3.SetRenderDrawColor(state.renderer, color.r, color.g, color.b, 255)
+	t := f32(thickness)
+	left := f32(x)
+	top := f32(y)
+	right := f32(x + width - thickness)
+	bottom := f32(y + height - thickness)
+	w := f32(width)
+	h := f32(height)
+
+	top_rect := sdl3.FRect{x = left, y = top, w = w, h = t}
+	bottom_rect := sdl3.FRect{x = left, y = bottom, w = w, h = t}
+	left_rect := sdl3.FRect{x = left, y = top, w = t, h = h}
+	right_rect := sdl3.FRect{x = right, y = top, w = t, h = h}
+	sdl3.RenderFillRect(state.renderer, &top_rect)
+	sdl3.RenderFillRect(state.renderer, &bottom_rect)
+	sdl3.RenderFillRect(state.renderer, &left_rect)
+	sdl3.RenderFillRect(state.renderer, &right_rect)
+}
+
+native_pane_pixel_rect :: proc(state: ^State, surface: ^render.Screen_Buffer, bounds: domain.Rect, output_pixel_width := 0, output_pixel_height := 0) -> (int, int, int, int) {
+	x := bounds.x * state.cell_width
+	y := bounds.y * state.cell_height
+	w := bounds.width * state.cell_width
+	h := bounds.height * state.cell_height
+
+	// i3bar reserves fixed bar space at the screen edge; the workspace area gets
+	// all remaining pixels. Our logical layout is still cell based, so give the
+	// bottom-most pane any residual pixels above the fixed workspace bar instead
+	// of leaving them below the bar or clipping the pane at the floored grid size.
+	if output_pixel_width > 0 && bounds.x + bounds.width == surface.width {
+		w = max_int(output_pixel_width - x, 0)
+	}
+	if output_pixel_height > 0 && bounds.y + bounds.height == surface.height - 1 {
+		workspace_bottom := max_int(output_pixel_height - state.cell_height, 0)
+		h = max_int(workspace_bottom - y, 0)
+	}
+
+	return x, y, w, h
 }

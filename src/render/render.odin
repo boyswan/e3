@@ -3,7 +3,7 @@ package render
 import domain "../app"
 import input "../input"
 
-render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Rect, mode := input.Input_Mode.Normal) {
+render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Rect, mode := input.Input_Mode.Normal, native_chrome := false, terminal_width_padding := 0, terminal_height_padding := 0) {
 	workspace := domain.active_workspace(state)
 	if workspace == nil {
 		return
@@ -19,31 +19,36 @@ render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Re
 	}
 
 	domain.layout_workspace(workspace, content_bounds)
-	domain.sync_pane_terminals(workspace.root)
-	render_split_separators(buffer, workspace.root)
-	screen_draw_box(buffer, content_bounds)
-	render_pane_borders(buffer, workspace.root, workspace.focused_pane_id, content_bounds)
-	render_focused_pane_border(buffer, state, workspace, content_bounds, mode)
-	render_pane_labels(buffer, workspace.root, workspace.focused_pane_id)
-	render_workspace_bar(buffer, state, mode, domain.Rect{x = bounds.x, y = bounds.y + bounds.height - 1, width = bounds.width, height = 1})
+	terminal_inset := 1
+	if native_chrome {
+		terminal_inset = 0
+	}
+	domain.sync_pane_terminals(workspace.root, terminal_inset, terminal_width_padding, terminal_height_padding)
+	if !native_chrome {
+		render_split_separators(buffer, workspace.root)
+		screen_draw_box(buffer, content_bounds)
+		render_pane_borders(buffer, workspace.root, workspace.focused_pane_id, content_bounds)
+		render_focused_pane_border(buffer, state, workspace, content_bounds, mode)
+	}
+	render_pane_labels(buffer, workspace.root, workspace.focused_pane_id, native_chrome)
+	render_workspace_bar(buffer, state, mode, domain.Rect{x = bounds.x, y = bounds.y + bounds.height - 1, width = bounds.width, height = 1}, native_chrome)
 }
 
-render_workspace_bar :: proc(buffer: ^Screen_Buffer, state: ^domain.App, mode: input.Input_Mode, bounds: domain.Rect) {
+render_workspace_bar :: proc(buffer: ^Screen_Buffer, state: ^domain.App, mode: input.Input_Mode, bounds: domain.Rect, native_chrome := false) {
+	_ = native_chrome
 	cursor_x := bounds.x
+	bar_bg := buffer.bar.background
+	screen_set_range_background(buffer, bounds.x, bounds.y, bounds.width, bar_bg.r, bar_bg.g, bar_bg.b)
 
 	for index in 0 ..< len(state.workspaces) {
 		workspace := &state.workspaces[index]
-		start_x := cursor_x
 		active := index == state.active_workspace_index
-
-		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " ")
-		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, workspace.name, active)
-		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " ")
-
+		colors := buffer.bar.inactive_workspace
 		if active {
-			active_bg := buffer.palette[0]
-			screen_set_range_background(buffer, start_x, bounds.y, cursor_x - start_x, active_bg.r, active_bg.g, active_bg.b)
+			colors = buffer.bar.focused_workspace
 		}
+
+		cursor_x = render_workspace_button(buffer, cursor_x, bounds.y, workspace.name, colors, active)
 	}
 
 	if mode == .Resize {
@@ -51,15 +56,20 @@ render_workspace_bar :: proc(buffer: ^Screen_Buffer, state: ^domain.App, mode: i
 		return
 	}
 
-	split_kind, has_split_kind := focused_insertion_kind(state)
-	if has_split_kind {
-		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " split:")
-		if split_kind == .Split_Horizontal {
-			screen_put_text(buffer, cursor_x, bounds.y, "right", true, .Split_Hint)
-		} else {
-			screen_put_text(buffer, cursor_x, bounds.y, "down", true, .Split_Hint)
-		}
+	_ = cursor_x
+}
+
+render_workspace_button :: proc(buffer: ^Screen_Buffer, x: int, y: int, name: string, colors: Workspace_Button_Colors, bold := false) -> int {
+	cursor_x := x
+	screen_put_rgb(buffer, cursor_x, y, " ", colors.text, colors.background, bold)
+	cursor_x += 1
+	for offset in 0 ..< len(name) {
+		screen_put_rgb(buffer, cursor_x, y, name[offset:offset + 1], colors.text, colors.background, bold)
+		cursor_x += 1
 	}
+	screen_put_rgb(buffer, cursor_x, y, " ", colors.text, colors.background, bold)
+	cursor_x += 1
+	return cursor_x
 }
 
 render_split_separators :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
@@ -128,7 +138,7 @@ render_split_separators :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
 	}
 }
 
-render_pane_labels :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, focused_pane_id: int) {
+render_pane_labels :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, focused_pane_id: int, native_chrome := false) {
 	if node == nil {
 		return
 	}
@@ -136,11 +146,11 @@ render_pane_labels :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, focused_p
 	switch node.kind {
 	case .Pane:
 		if node.pane != nil {
-			render_pane_label(buffer, node.pane, node.pane.id == focused_pane_id)
+			render_pane_label(buffer, node.pane, node.pane.id == focused_pane_id, native_chrome)
 		}
 	case .Split_Horizontal, .Split_Vertical:
 		for child in node.children {
-			render_pane_labels(buffer, child, focused_pane_id)
+			render_pane_labels(buffer, child, focused_pane_id, native_chrome)
 		}
 	case .Stacked, .Tabbed:
 		if len(node.children) == 0 {
@@ -152,17 +162,21 @@ render_pane_labels :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, focused_p
 			index = 0
 		}
 
-		render_pane_labels(buffer, node.children[index], focused_pane_id)
+		render_pane_labels(buffer, node.children[index], focused_pane_id, native_chrome)
 	}
 }
 
-render_pane_label :: proc(buffer: ^Screen_Buffer, pane: ^domain.Pane, focused: bool) {
+render_pane_label :: proc(buffer: ^Screen_Buffer, pane: ^domain.Pane, focused: bool, native_chrome := false) {
 	bounds := pane.bounds
-	if bounds.width <= 3 || bounds.height <= 2 {
+	if bounds.width <= 0 || bounds.height <= 0 {
 		return
 	}
 
-	render_terminal_contents(buffer, pane, focused)
+	inset := 1
+	if native_chrome {
+		inset = 0
+	}
+	render_terminal_contents(buffer, pane, focused, inset)
 }
 
 render_pane_borders :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, focused_pane_id: int, content_bounds: domain.Rect) {
