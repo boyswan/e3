@@ -12,6 +12,7 @@ Command_Kind :: enum {
 	Resize_Shrink_Height,
 	Move_Pane,
 	Layout_Toggle_Split,
+	Layout_Tabbed,
 	Close_Pane,
 	Dump_Tree,
 }
@@ -66,6 +67,10 @@ command_layout_toggle_split :: proc() -> Command {
 	return Command{kind = .Layout_Toggle_Split}
 }
 
+command_layout_tabbed :: proc() -> Command {
+	return Command{kind = .Layout_Tabbed}
+}
+
 command_close_pane :: proc() -> Command {
 	return Command{kind = .Close_Pane}
 }
@@ -98,6 +103,8 @@ execute_command :: proc(app: ^App, command: Command) -> bool {
 		return move_pane_direction(app, command.direction)
 	case .Layout_Toggle_Split:
 		return layout_toggle_split(app)
+	case .Layout_Tabbed:
+		return layout_tabbed(app)
 	case .Close_Pane:
 		return close_focused_pane(app)
 	case .Dump_Tree:

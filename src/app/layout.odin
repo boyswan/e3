@@ -174,6 +174,21 @@ focus_child :: proc(parent: ^Node, child: ^Node) -> bool {
 	return true
 }
 
+remove_from_focus_order :: proc(parent: ^Node, child: ^Node) {
+	if parent == nil || child == nil {
+		return
+	}
+
+	index := 0
+	for index < len(parent.focus_order) {
+		if parent.focus_order[index] == child {
+			ordered_remove(&parent.focus_order, index)
+			continue
+		}
+		index += 1
+	}
+}
+
 focus_node :: proc(workspace: ^Workspace, node: ^Node) -> bool {
 	if workspace == nil || node == nil {
 		return false
@@ -419,6 +434,7 @@ close_focused_pane :: proc(app: ^App) -> bool {
 		return false
 	}
 
+	remove_from_focus_order(parent, focused)
 	ordered_remove(&parent.children, index)
 	if index < len(parent.weights) {
 		ordered_remove(&parent.weights, index)
@@ -431,10 +447,11 @@ close_focused_pane :: proc(app: ^App) -> bool {
 		}
 
 		parent.focused_child_index = focus_index
-		fallback := descend_focused(parent.children[focus_index])
-		if fallback != nil && fallback.pane != nil {
-			workspace.focused_pane_id = fallback.pane.id
+		fallback := focused_child(parent)
+		if fallback == nil {
+			fallback = parent.children[focus_index]
 		}
+		focus_node(workspace, fallback)
 	}
 
 	cleanup_workspace(workspace)
@@ -665,6 +682,39 @@ toggle_split_kind :: proc(kind: Node_Kind) -> Node_Kind {
 	return .Split_Horizontal
 }
 
+layout_tabbed :: proc(app: ^App) -> bool {
+	workspace := active_workspace(app)
+	if workspace == nil || workspace.root == nil {
+		return false
+	}
+
+	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+	if focused == nil || focused.kind != .Pane {
+		return false
+	}
+
+	parent := focused.parent
+	if parent == nil {
+		container := make_container_node(.Tabbed)
+		container.last_split_kind = workspace.default_split_kind
+		container.parent = nil
+		focused.parent = container
+		append(&container.children, focused)
+		append(&container.focus_order, focused)
+		append(&container.weights, 1.0)
+		container.focused_child_index = 0
+		workspace.root = container
+		return focus_node(workspace, focused)
+	}
+
+	if is_split_kind(parent.kind) {
+		parent.last_split_kind = parent.kind
+	}
+	parent.kind = .Tabbed
+	repair_container_focus_and_weights(parent)
+	return focus_node(workspace, focused)
+}
+
 layout_toggle_split :: proc(app: ^App) -> bool {
 	workspace := active_workspace(app)
 	if workspace == nil {
@@ -690,7 +740,20 @@ layout_toggle_split :: proc(app: ^App) -> bool {
 
 	if is_split_kind(parent.kind) {
 		parent.kind = toggle_split_kind(parent.kind)
+		parent.last_split_kind = parent.kind
 		focused.pane.split_kind = parent.kind
+		return focus_node(workspace, focused)
+	}
+
+	if parent.kind == .Tabbed {
+		split_kind := parent.last_split_kind
+		if !is_split_kind(split_kind) {
+			split_kind = .Split_Horizontal
+		}
+		parent.kind = split_kind
+		parent.last_split_kind = split_kind
+		focused.pane.split_kind = split_kind
+		cleanup_workspace(workspace)
 		return focus_node(workspace, focused)
 	}
 
@@ -715,7 +778,8 @@ move_pane_direction :: proc(app: ^App, direction: Direction) -> bool {
 
 	for current.parent != nil {
 		parent := current.parent
-		if parent.kind == wanted_kind {
+		parent_kind, parent_has_orientation := navigation_kind(parent.kind)
+		if parent_has_orientation && parent_kind == wanted_kind {
 			if len(parent.children) == 1 {
 				index := find_child_index(parent, current)
 				if index < 0 {
@@ -730,7 +794,7 @@ move_pane_direction :: proc(app: ^App, direction: Direction) -> bool {
 				}
 			}
 		}
-		if parent.kind == wanted_kind && len(parent.children) > 1 {
+		if parent_has_orientation && parent_kind == wanted_kind && len(parent.children) > 1 {
 			index := find_child_index(parent, current)
 			if index < 0 {
 				return false
@@ -1148,6 +1212,8 @@ layout_node :: proc(node: ^Node, bounds: Rect) {
 		return
 	}
 
+	node.bounds = bounds
+	node.deco_bounds = Rect{}
 	switch node.kind {
 	case .Pane:
 		if node.pane != nil {
@@ -1157,7 +1223,7 @@ layout_node :: proc(node: ^Node, bounds: Rect) {
 		layout_split_horizontal(node, bounds)
 	case .Split_Vertical:
 		layout_split_vertical(node, bounds)
-	case .Stacked, .Tabbed:
+	case .Stacked:
 		if len(node.children) == 0 {
 			return
 		}
@@ -1168,6 +1234,41 @@ layout_node :: proc(node: ^Node, bounds: Rect) {
 		}
 
 		layout_node(node.children[index], bounds)
+	case .Tabbed:
+		layout_tabbed_node(node, bounds)
+	}
+}
+
+layout_tabbed_node :: proc(node: ^Node, bounds: Rect) {
+	child_count := len(node.children)
+	if child_count == 0 {
+		return
+	}
+
+	repair_container_focus_and_weights(node)
+	content := bounds
+	deco_height := 1
+	if content.height > deco_height {
+		content.y += deco_height
+		content.height -= deco_height
+	} else {
+		content.height = 0
+	}
+
+	remaining_width := bounds.width
+	tab_x := bounds.x
+	for index in 0 ..< child_count {
+		tab_width := bounds.width / child_count
+		if index == child_count - 1 {
+			tab_width = remaining_width
+		}
+
+		child := node.children[index]
+		layout_node(child, content)
+		child.deco_bounds = Rect{x = tab_x, y = bounds.y, width = tab_width, height = deco_height}
+
+		tab_x += tab_width
+		remaining_width -= tab_width
 	}
 }
 

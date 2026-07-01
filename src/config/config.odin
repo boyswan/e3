@@ -237,6 +237,12 @@ apply_input_value :: proc(key: string, value: string, config: ^Config) {
 		config.bindings.dump_tree = value
 	case "resize_mode":
 		config.bindings.resize_mode = value
+	case "fullscreen_toggle":
+		config.bindings.fullscreen_toggle = value
+	case "layout_stacking":
+		config.bindings.layout_stacking = value
+	case "layout_tabbed":
+		config.bindings.layout_tabbed = value
 	case "layout_toggle_split", "rotate_layout":
 		config.bindings.layout_toggle_split = value
 	case "focus_left":

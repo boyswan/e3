@@ -213,6 +213,9 @@ mod_key_action :: proc(key: sdl3.Keycode, shift: bool, bindings: input.Key_Bindi
 	if key_matches(key, shift, bindings.layout_toggle_split) {
 		return input.Action{kind = .Command, command = domain.command_layout_toggle_split()}
 	}
+	if key_matches(key, shift, bindings.layout_tabbed) {
+		return input.Action{kind = .Command, command = domain.command_layout_tabbed()}
+	}
 	if key_matches(key, shift, bindings.focus_left) {
 		return input.Action{kind = .Command, command = domain.command_focus(.Left)}
 	}

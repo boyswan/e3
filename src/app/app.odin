@@ -45,6 +45,10 @@ make_pane_node :: proc(pane: ^Pane) -> ^Node {
 make_container_node :: proc(kind: Node_Kind) -> ^Node {
 	node := new(Node)
 	node.kind = kind
+	node.last_split_kind = .Split_Horizontal
+	if is_split_kind(kind) {
+		node.last_split_kind = kind
+	}
 	node.children = make([dynamic]^Node)
 	node.focus_order = make([dynamic]^Node)
 	node.weights = make([dynamic]f32)

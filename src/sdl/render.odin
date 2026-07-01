@@ -605,7 +605,50 @@ draw_native_chrome :: proc(state: ^State, surface: ^render.Screen_Buffer, app: ^
 	}
 
 	draw_native_pane_borders(state, surface, workspace.root, workspace.focused_pane_id, mode, output_pixel_width, output_pixel_height)
+	draw_native_tab_borders(state, surface, workspace.root)
 	draw_native_workspace_bar_borders(state, surface, app, output_pixel_height)
+}
+
+draw_native_tab_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, node: ^domain.Node) {
+	if node == nil {
+		return
+	}
+
+	switch node.kind {
+	case .Pane:
+		return
+	case .Split_Horizontal, .Split_Vertical:
+		for child in node.children {
+			draw_native_tab_borders(state, surface, child)
+		}
+	case .Stacked:
+		child := domain.focused_child(node)
+		if child != nil {
+			draw_native_tab_borders(state, surface, child)
+		}
+	case .Tabbed:
+		border := surface.bar.separator
+		for child in node.children {
+			deco := child.deco_bounds
+			if deco.width <= 0 || deco.height <= 0 {
+				continue
+			}
+			draw_native_rect_border(
+				state,
+				deco.x * state.cell_width,
+				deco.y * state.cell_height,
+				deco.width * state.cell_width,
+				deco.height * state.cell_height,
+				border,
+				1,
+			)
+		}
+
+		child := domain.focused_child(node)
+		if child != nil {
+			draw_native_tab_borders(state, surface, child)
+		}
+	}
 }
 
 draw_native_pane_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, node: ^domain.Node, focused_pane_id: int, mode: input.Input_Mode, output_pixel_width := 0, output_pixel_height := 0) {
@@ -631,16 +674,38 @@ draw_native_pane_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, 
 
 		r, g, b := cell_color(surface, render.Cell{color = color})
 		draw_native_pane_border(state, surface, node.pane.bounds, r, g, b, output_pixel_width, output_pixel_height)
+		if node.pane.id == focused_pane_id && mode != .Resize && node.pane.split_active {
+			hint_r, hint_g, hint_b := cell_color(surface, render.Cell{color = .Split_Hint})
+			draw_native_split_hint(state, surface, node.pane.bounds, node.pane.split_kind, hint_r, hint_g, hint_b, output_pixel_width, output_pixel_height)
+		}
 	case .Split_Horizontal, .Split_Vertical:
 		for child in node.children {
 			draw_native_pane_borders(state, surface, child, focused_pane_id, mode, output_pixel_width, output_pixel_height)
 		}
 	case .Stacked, .Tabbed:
-		child := domain.descend_focused(node)
+		child := domain.focused_child(node)
 		if child != nil {
 			draw_native_pane_borders(state, surface, child, focused_pane_id, mode, output_pixel_width, output_pixel_height)
 		}
 	}
+}
+
+draw_native_split_hint :: proc(state: ^State, surface: ^render.Screen_Buffer, bounds: domain.Rect, split_kind: domain.Node_Kind, r: int, g: int, b: int, output_pixel_width := 0, output_pixel_height := 0) {
+	pane_x, pane_y, pane_w, pane_h := native_pane_pixel_rect(state, surface, bounds, output_pixel_width, output_pixel_height)
+	line_width := f32(max_int(state.native_border_px, 1))
+	if pane_w <= 0 || pane_h <= 0 {
+		return
+	}
+
+	sdl3.SetRenderDrawColor(state.renderer, u8(r), u8(g), u8(b), 255)
+	if split_kind == .Split_Vertical {
+		rect := sdl3.FRect{x = f32(pane_x), y = f32(pane_y + pane_h) - line_width, w = f32(pane_w), h = line_width}
+		sdl3.RenderFillRect(state.renderer, &rect)
+		return
+	}
+
+	rect := sdl3.FRect{x = f32(pane_x + pane_w) - line_width, y = f32(pane_y), w = line_width, h = f32(pane_h)}
+	sdl3.RenderFillRect(state.renderer, &rect)
 }
 
 draw_native_pane_border :: proc(state: ^State, surface: ^render.Screen_Buffer, bounds: domain.Rect, r: int, g: int, b: int, output_pixel_width := 0, output_pixel_height := 0) {
@@ -699,7 +764,7 @@ native_cell_pane_bounds_node :: proc(node: ^domain.Node, x: int, y: int) -> (dom
 			}
 		}
 	case .Stacked, .Tabbed:
-		child := domain.descend_focused(node)
+		child := domain.focused_child(node)
 		if child != nil {
 			return native_cell_pane_bounds_node(child, x, y)
 		}

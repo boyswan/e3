@@ -30,6 +30,7 @@ render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Re
 		render_pane_borders(buffer, workspace.root, workspace.focused_pane_id, content_bounds)
 		render_focused_pane_border(buffer, state, workspace, content_bounds, mode)
 	}
+	render_tab_bars(buffer, workspace.root)
 	render_pane_labels(buffer, workspace.root, workspace.focused_pane_id, native_chrome)
 	render_workspace_bar(buffer, state, mode, domain.Rect{x = bounds.x, y = bounds.y + bounds.height - 1, width = bounds.width, height = 1}, native_chrome)
 }
@@ -138,6 +139,182 @@ render_split_separators :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
 	}
 }
 
+render_tab_bars :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
+	if node == nil {
+		return
+	}
+
+	switch node.kind {
+	case .Pane:
+		return
+	case .Split_Horizontal, .Split_Vertical:
+		for child in node.children {
+			render_tab_bars(buffer, child)
+		}
+	case .Stacked:
+		child := domain.focused_child(node)
+		if child != nil {
+			render_tab_bars(buffer, child)
+		}
+	case .Tabbed:
+		render_tab_bar(buffer, node)
+		child := domain.focused_child(node)
+		if child != nil {
+			render_tab_bars(buffer, child)
+		}
+	}
+}
+
+render_tab_bar :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
+	child_count := len(node.children)
+	if child_count == 0 {
+		return
+	}
+
+	focused := domain.focused_child(node)
+	focused_colors := Workspace_Button_Colors{border = RGB_Color{0x4c, 0x78, 0x99}, background = RGB_Color{0x28, 0x55, 0x77}, text = RGB_Color{0xff, 0xff, 0xff}}
+	inactive_colors := Workspace_Button_Colors{border = RGB_Color{0x33, 0x33, 0x33}, background = RGB_Color{0x22, 0x22, 0x22}, text = RGB_Color{0x88, 0x88, 0x88}}
+
+	for index in 0 ..< child_count {
+		child := node.children[index]
+		deco := child.deco_bounds
+		if deco.width <= 0 || deco.height <= 0 {
+			continue
+		}
+
+		colors := inactive_colors
+		if child == focused {
+			colors = focused_colors
+		}
+		render_tab_button(buffer, child, deco.x, deco.y, deco.width, colors)
+	}
+}
+
+render_tab_button :: proc(buffer: ^Screen_Buffer, child: ^domain.Node, x: int, y: int, width: int, colors: Workspace_Button_Colors) {
+	if width <= 0 {
+		return
+	}
+
+	for offset in 0 ..< width {
+		screen_put_rgb(buffer, x + offset, y, " ", colors.text, colors.background)
+	}
+
+	title_width := node_title_width(child)
+	if title_width <= 0 {
+		return
+	}
+	start_x := x + max_int((width - title_width) / 2, 0)
+	render_node_title(buffer, child, start_x, y, colors.text, colors.background)
+}
+
+node_title_width :: proc(node: ^domain.Node) -> int {
+	if node == nil {
+		return 0
+	}
+
+	switch node.kind {
+	case .Pane:
+		if node.pane == nil {
+			return 0
+		}
+		return digit_count(node.pane.id)
+	case .Split_Horizontal, .Split_Vertical, .Stacked, .Tabbed:
+		width := 3
+		for index in 0 ..< len(node.children) {
+			if index > 0 {
+				width += 1
+			}
+			width += node_title_width(node.children[index])
+		}
+		return width
+	}
+
+	return 0
+}
+
+render_node_title :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, x: int, y: int, fg: RGB_Color, bg: RGB_Color) -> int {
+	if node == nil {
+		return x
+	}
+
+	cursor_x := x
+	switch node.kind {
+	case .Pane:
+		if node.pane != nil {
+			cursor_x = render_put_int_rgb(buffer, cursor_x, y, node.pane.id, fg, bg)
+		}
+	case .Split_Horizontal, .Split_Vertical, .Stacked, .Tabbed:
+		screen_put_rgb(buffer, cursor_x, y, node_title_layout_glyph(node.kind), fg, bg)
+		cursor_x += 1
+		screen_put_rgb(buffer, cursor_x, y, "[", fg, bg)
+		cursor_x += 1
+		for index in 0 ..< len(node.children) {
+			if index > 0 {
+				screen_put_rgb(buffer, cursor_x, y, " ", fg, bg)
+				cursor_x += 1
+			}
+			cursor_x = render_node_title(buffer, node.children[index], cursor_x, y, fg, bg)
+		}
+		screen_put_rgb(buffer, cursor_x, y, "]", fg, bg)
+		cursor_x += 1
+	}
+
+	return cursor_x
+}
+
+node_title_layout_glyph :: proc(kind: domain.Node_Kind) -> string {
+	switch kind {
+	case .Split_Horizontal:
+		return "H"
+	case .Split_Vertical:
+		return "V"
+	case .Stacked:
+		return "S"
+	case .Tabbed:
+		return "T"
+	case .Pane:
+		return ""
+	}
+	return ""
+}
+
+render_put_int_rgb :: proc(buffer: ^Screen_Buffer, x: int, y: int, value: int, fg: RGB_Color, bg: RGB_Color) -> int {
+	cursor_x := x
+	remaining := value
+	if remaining == 0 {
+		screen_put_rgb(buffer, cursor_x, y, "0", fg, bg)
+		return cursor_x + 1
+	}
+
+	digits: [20]int
+	count := 0
+	for remaining > 0 && count < len(digits) {
+		digits[count] = remaining % 10
+		remaining /= 10
+		count += 1
+	}
+
+	for count > 0 {
+		count -= 1
+		screen_put_rgb(buffer, cursor_x, y, digit_string(digits[count]), fg, bg)
+		cursor_x += 1
+	}
+	return cursor_x
+}
+
+digit_count :: proc(value: int) -> int {
+	if value == 0 {
+		return 1
+	}
+	count := 0
+	remaining := value
+	for remaining > 0 {
+		remaining /= 10
+		count += 1
+	}
+	return count
+}
+
 render_pane_labels :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, focused_pane_id: int, native_chrome := false) {
 	if node == nil {
 		return
@@ -153,16 +330,10 @@ render_pane_labels :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, focused_p
 			render_pane_labels(buffer, child, focused_pane_id, native_chrome)
 		}
 	case .Stacked, .Tabbed:
-		if len(node.children) == 0 {
-			return
+		child := domain.focused_child(node)
+		if child != nil {
+			render_pane_labels(buffer, child, focused_pane_id, native_chrome)
 		}
-
-		index := node.focused_child_index
-		if index < 0 || index >= len(node.children) {
-			index = 0
-		}
-
-		render_pane_labels(buffer, node.children[index], focused_pane_id, native_chrome)
 	}
 }
 
@@ -200,7 +371,7 @@ render_pane_borders :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, focused_
 			render_pane_borders(buffer, child, focused_pane_id, content_bounds)
 		}
 	case .Stacked, .Tabbed:
-		child := domain.descend_focused(node)
+		child := domain.focused_child(node)
 		if child != nil {
 			render_pane_borders(buffer, child, focused_pane_id, content_bounds)
 		}
@@ -335,16 +506,14 @@ node_bounds :: proc(node: ^domain.Node) -> (domain.Rect, bool) {
 
 		return bounds, true
 	case .Stacked, .Tabbed:
-		if len(node.children) == 0 {
-			return domain.Rect{}, false
+		if node.bounds.width > 0 && node.bounds.height > 0 {
+			return node.bounds, true
 		}
-
-		index := node.focused_child_index
-		if index < 0 || index >= len(node.children) {
-			index = 0
+		child := domain.focused_child(node)
+		if child != nil {
+			return node_bounds(child)
 		}
-
-		return node_bounds(node.children[index])
+		return domain.Rect{}, false
 	}
 
 	return domain.Rect{}, false

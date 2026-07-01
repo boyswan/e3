@@ -623,7 +623,7 @@ sync_pane_terminals :: proc(node: ^Node, inset := 1, extra_width_padding := 0, e
 		for child in node.children {
 			sync_pane_terminals(child, inset, extra_width_padding, extra_height_padding)
 		}
-	case .Stacked, .Tabbed:
+	case .Stacked:
 		if len(node.children) == 0 {
 			return
 		}
@@ -632,6 +632,10 @@ sync_pane_terminals :: proc(node: ^Node, inset := 1, extra_width_padding := 0, e
 			index = 0
 		}
 		sync_pane_terminals(node.children[index], inset, extra_width_padding, extra_height_padding)
+	case .Tabbed:
+		for child in node.children {
+			sync_pane_terminals(child, inset, extra_width_padding, extra_height_padding)
+		}
 	}
 }
 
@@ -650,7 +654,7 @@ poll_pane_terminals :: proc(node: ^Node) -> bool {
 		for child in node.children {
 			changed = poll_pane_terminals(child) || changed
 		}
-	case .Stacked, .Tabbed:
+	case .Stacked:
 		if len(node.children) == 0 {
 			return false
 		}
@@ -659,6 +663,10 @@ poll_pane_terminals :: proc(node: ^Node) -> bool {
 			index = 0
 		}
 		changed = poll_pane_terminals(node.children[index])
+	case .Tabbed:
+		for child in node.children {
+			changed = poll_pane_terminals(child) || changed
+		}
 	}
 
 	return changed

@@ -64,6 +64,8 @@ action_from_modified_key :: proc(key: byte) -> input.Action {
 		return input.Action{kind = .Command, command = domain.command_open_pane()}
 	case 'w':
 		return input.Action{kind = .Command, command = domain.command_close_pane()}
+	case 'W':
+		return input.Action{kind = .Command, command = domain.command_layout_tabbed()}
 	case 't':
 		return input.Action{kind = .Command, command = domain.command_dump_tree()}
 	case 'r':

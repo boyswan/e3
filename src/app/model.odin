@@ -63,6 +63,8 @@ Direction :: enum {
 Node :: struct {
 	kind:   Node_Kind,
 	parent: ^Node,
+	bounds: Rect,
+	deco_bounds: Rect,
 
 	// Leaf node state.
 	pane: ^Pane,
@@ -72,6 +74,7 @@ Node :: struct {
 	focused_child_index: int,
 	focus_order:         [dynamic]^Node,
 	weights:             [dynamic]f32,
+	last_split_kind:     Node_Kind,
 }
 
 Workspace :: struct {
