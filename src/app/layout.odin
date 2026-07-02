@@ -785,7 +785,6 @@ move_pane_direction :: proc(app: ^App, direction: Direction) -> bool {
 	wanted_kind := orientation_from_direction(direction)
 	previous := is_previous_direction(direction)
 	current := focused
-	blocked_at_workspace_edge := false
 
 	for current.parent != nil {
 		parent := current.parent
@@ -816,9 +815,18 @@ move_pane_direction :: proc(app: ^App, direction: Direction) -> bool {
 				neighbor_index = index - 1
 			}
 			if neighbor_index < 0 || neighbor_index >= len(parent.children) {
-				if parent == workspace.root {
-					blocked_at_workspace_edge = true
+				if current != focused {
+					insert_index := index
+					if !previous {
+						insert_index = index + 1
+					}
+					return move_focused_out_to_parent(workspace, focused, parent, insert_index)
 				}
+
+				if parent == workspace.root && is_split_kind(parent.kind) {
+					return false
+				}
+
 				current = parent
 				continue
 			}
@@ -843,10 +851,6 @@ move_pane_direction :: proc(app: ^App, direction: Direction) -> bool {
 		}
 
 		current = parent
-	}
-
-	if blocked_at_workspace_edge {
-		return false
 	}
 
 	return move_focused_to_new_workspace_split(workspace, focused, direction)
