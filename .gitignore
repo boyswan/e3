@@ -1,7 +1,10 @@
 .direnv
 .git
 .jj
+.deps
 plan.md
 i3.md
 i3
 src.bin
+e3
+vendor/ghostty-vt

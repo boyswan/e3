@@ -2,7 +2,6 @@ package app
 
 import "core:c"
 import "core:fmt"
-import "base:runtime"
 import vt "../terminal"
 import posix "core:sys/posix"
 
@@ -36,19 +35,6 @@ Pty_Winsize :: struct {
 }
 
 MAX_SCROLLBACK_LINES :: 5000
-
-terminal_screen_callbacks: vt.VTermScreenCallbacks
-terminal_screen_callbacks_initialized := false
-
-terminal_ensure_screen_callbacks :: proc() {
-	if terminal_screen_callbacks_initialized {
-		return
-	}
-	terminal_screen_callbacks.sb_pushline = terminal_vterm_sb_pushline
-	terminal_screen_callbacks.sb_popline = nil
-	terminal_screen_callbacks.sb_clear = terminal_vterm_sb_clear
-	terminal_screen_callbacks_initialized = true
-}
 
 terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) -> bool {
 	if term.active {
@@ -102,8 +88,8 @@ terminal_resize_grid :: proc(term: ^Terminal_Handle, width: int, height: int) {
 		return
 	}
 
-	if term.backend == .Libvterm {
-		terminal_resize_libvterm(term, width, height)
+	if term.backend == .Ghostty {
+		terminal_resize_ghostty(term, width, height)
 		return
 	}
 
@@ -126,26 +112,26 @@ terminal_resize_grid :: proc(term: ^Terminal_Handle, width: int, height: int) {
 	terminal_resize_pty(term, width, height)
 }
 
-terminal_resize_libvterm :: proc(term: ^Terminal_Handle, width: int, height: int) {
-	if term.vterm == nil {
-		vt.check_version(0, 3)
-		term.vterm = vt.new(c.int(height), c.int(width))
-		if term.vterm == nil {
+terminal_resize_ghostty :: proc(term: ^Terminal_Handle, width: int, height: int) {
+	if term.ghostty == nil {
+		options := vt.GhosttyTerminalOptions {
+			cols = u16(width),
+			rows = u16(height),
+			max_scrollback = MAX_SCROLLBACK_LINES,
+		}
+		if vt.ghostty_terminal_new(nil, &term.ghostty, options) != .SUCCESS {
 			return
 		}
 
-		vt.set_utf8(term.vterm, 1)
-		term.vterm_state = vt.obtain_state(term.vterm)
-		term.vterm_screen = vt.obtain_screen(term.vterm)
-		if term.vterm_screen != nil {
-			terminal_ensure_screen_callbacks()
-			vt.set_callbacks(term.vterm_screen, &terminal_screen_callbacks, rawptr(term))
-			vt.enable_altscreen(term.vterm_screen, 1)
-			vt.set_damage_merge(term.vterm_screen, .Screen)
-			vt.reset(term.vterm_screen, 1)
-		}
+		vt.ghostty_terminal_set(term.ghostty, .USERDATA, rawptr(term))
+		write_pty: vt.GhosttyTerminalWritePtyFn = terminal_ghostty_write_pty
+		vt.ghostty_terminal_set(term.ghostty, .WRITE_PTY, transmute(rawptr)write_pty)
+
+		vt.ghostty_render_state_new(nil, &term.render_state)
+		vt.ghostty_render_state_row_iterator_new(nil, &term.row_iterator)
+		vt.ghostty_render_state_row_cells_new(nil, &term.row_cells)
 	} else if term.width != width || term.height != height {
-		vt.set_size(term.vterm, c.int(height), c.int(width))
+		vt.ghostty_terminal_resize(term.ghostty, u16(width), u16(height), 1, 1)
 	}
 
 	term.width = width
@@ -176,11 +162,17 @@ terminal_destroy :: proc(term: ^Terminal_Handle) {
 	if term.cells != nil {
 		delete(term.cells)
 	}
-	if term.scrollback != nil {
-		delete(term.scrollback)
+	if term.row_cells != nil {
+		vt.ghostty_render_state_row_cells_free(term.row_cells)
 	}
-	if term.vterm != nil {
-		vt.free(term.vterm)
+	if term.row_iterator != nil {
+		vt.ghostty_render_state_row_iterator_free(term.row_iterator)
+	}
+	if term.render_state != nil {
+		vt.ghostty_render_state_free(term.render_state)
+	}
+	if term.ghostty != nil {
+		vt.ghostty_terminal_free(term.ghostty)
 	}
 	term^ = Terminal_Handle{}
 }
@@ -233,11 +225,8 @@ terminal_write_input :: proc(term: ^Terminal_Handle, data: []byte) -> bool {
 }
 
 terminal_write_output :: proc(term: ^Terminal_Handle, data: []byte) {
-	if len(data) > 0 {
-		term.scroll_offset = 0
-	}
-	if term.backend == .Libvterm {
-		terminal_write_libvterm_output(term, data)
+	if term.backend == .Ghostty {
+		terminal_write_ghostty_output(term, data)
 		return
 	}
 
@@ -246,30 +235,34 @@ terminal_write_output :: proc(term: ^Terminal_Handle, data: []byte) {
 	}
 }
 
-terminal_write_libvterm_output :: proc(term: ^Terminal_Handle, data: []byte) {
-	if term.vterm == nil || len(data) == 0 {
+terminal_write_ghostty_output :: proc(term: ^Terminal_Handle, data: []byte) {
+	if term.ghostty == nil || len(data) == 0 {
 		return
 	}
 
-	vt.input_write(term.vterm, raw_data(data), c.size_t(len(data)))
-	terminal_drain_libvterm_output(term)
-	if term.vterm_screen != nil {
-		vt.flush_damage(term.vterm_screen)
-	}
+	vt.ghostty_terminal_vt_write(term.ghostty, raw_data(data), c.size_t(len(data)))
+
+	// Keep the viewport pinned to the bottom on new output.
+	vt.ghostty_terminal_scroll_viewport(term.ghostty, vt.GhosttyTerminalScrollViewport{tag = .BOTTOM})
 }
 
-terminal_drain_libvterm_output :: proc(term: ^Terminal_Handle) {
-	if term.vterm == nil || !term.active {
+terminal_ghostty_write_pty :: proc "c" (_: vt.GhosttyTerminal, userdata: rawptr, data: [^]u8, len: c.size_t) {
+	term := (^Terminal_Handle)(userdata)
+	if term == nil || !term.active || data == nil || len == 0 {
 		return
 	}
 
-	for vt.output_get_buffer_current(term.vterm) > 0 {
-		buffer: [4096]byte
-		count := vt.output_read(term.vterm, raw_data(buffer[:]), c.size_t(len(buffer)))
-		if count == 0 {
-			return
+	total_written := 0
+	for total_written < int(len) {
+		written := posix.write(
+			posix.FD(term.pty_fd),
+			&data[total_written],
+			c.size_t(int(len) - total_written),
+		)
+		if written <= 0 {
+			break
 		}
-		posix.write(posix.FD(term.pty_fd), raw_data(buffer[:count]), count)
+		total_written += int(written)
 	}
 }
 
@@ -737,98 +730,15 @@ terminal_max_int :: proc(a: int, b: int) -> int {
 	return b
 }
 
-terminal_vterm_sb_pushline :: proc "c" (cols: c.int, cells: [^]vt.VTermScreenCell, user: rawptr) -> c.int {
-	context = runtime.default_context()
-	term := (^Terminal_Handle)(user)
-	if term == nil || cols <= 0 {
-		return 0
-	}
-
-	terminal_prepare_scrollback(term, int(cols))
-	for index in 0 ..< int(cols) {
-		append(&term.scrollback, cells[index])
-	}
-	terminal_trim_scrollback(term)
-	return 1
-}
-
-terminal_vterm_sb_popline :: proc "c" (cols: c.int, cells: [^]vt.VTermScreenCell, user: rawptr) -> c.int {
-	context = runtime.default_context()
-	term := (^Terminal_Handle)(user)
-	if term == nil || cols <= 0 || term.scrollback_cols != int(cols) {
-		return 0
-	}
-	line_count := terminal_scrollback_line_count(term)
-	if line_count <= 0 {
-		return 0
-	}
-
-	start := (line_count - 1) * term.scrollback_cols
-	for index in 0 ..< term.scrollback_cols {
-		cells[index] = term.scrollback[start + index]
-	}
-	for index := 0; index < term.scrollback_cols; index += 1 {
-		pop(&term.scrollback)
-	}
-	return 1
-}
-
-terminal_vterm_sb_clear :: proc "c" (user: rawptr) -> c.int {
-	context = runtime.default_context()
-	term := (^Terminal_Handle)(user)
-	if term == nil {
-		return 0
-	}
-	if term.scrollback != nil {
-		clear(&term.scrollback)
-	}
-	term.scroll_offset = 0
-	return 1
-}
-
-terminal_prepare_scrollback :: proc(term: ^Terminal_Handle, cols: int) {
-	if term.scrollback_cols != cols {
-		if term.scrollback != nil {
-			clear(&term.scrollback)
-		}
-		term.scrollback_cols = cols
-		term.scroll_offset = 0
-	}
-	if term.max_scrollback <= 0 {
-		term.max_scrollback = MAX_SCROLLBACK_LINES
-	}
-}
-
-terminal_trim_scrollback :: proc(term: ^Terminal_Handle) {
-	if term.scrollback_cols <= 0 {
-		return
-	}
-	for terminal_scrollback_line_count(term) > term.max_scrollback {
-		for index in 0 ..< term.scrollback_cols {
-			ordered_remove(&term.scrollback, 0)
-		}
-	}
-}
-
-terminal_scrollback_line_count :: proc(term: ^Terminal_Handle) -> int {
-	if term == nil || term.scrollback_cols <= 0 {
-		return 0
-	}
-	return len(term.scrollback) / term.scrollback_cols
-}
-
 terminal_scroll_view :: proc(term: ^Terminal_Handle, lines: int) {
-	if term == nil || lines == 0 {
+	if term == nil || lines == 0 || term.ghostty == nil {
 		return
 	}
-	max_offset := terminal_scrollback_line_count(term)
-	term.scroll_offset += lines
-	if term.scroll_offset < 0 {
-		term.scroll_offset = 0
+	behavior := vt.GhosttyTerminalScrollViewport {
+		tag = .DELTA,
+		value = vt.GhosttyTerminalScrollViewportValue{delta = c.ptrdiff_t(-lines)},
 	}
-	if term.scroll_offset > max_offset {
-		term.scroll_offset = max_offset
-	}
+	vt.ghostty_terminal_scroll_viewport(term.ghostty, behavior)
 }
 
 scroll_focused_terminal :: proc(app: ^App, lines: int) -> bool {

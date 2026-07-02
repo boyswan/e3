@@ -28,7 +28,7 @@ workspace_name :: proc(id: int) -> string {
 make_pane :: proc(app: ^App) -> ^Pane {
 	pane := new(Pane)
 	pane.id = app.next_pane_id
-	pane.terminal.backend = .Libvterm
+	pane.terminal.backend = .Ghostty
 	pane.split_kind = .Split_Horizontal
 	pane.split_active = false
 	app.next_pane_id += 1

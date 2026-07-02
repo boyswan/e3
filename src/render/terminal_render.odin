@@ -1,13 +1,12 @@
 package render
 
-import "core:c"
 import app "../app"
 import vt "../terminal"
 
 render_terminal_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focused := false, inset := 1) {
 	term := &pane.terminal
-	if term.backend == .Libvterm {
-		render_libvterm_contents(buffer, pane, focused, inset)
+	if term.backend == .Ghostty {
+		render_ghostty_contents(buffer, pane, focused, inset)
 		return
 	}
 
@@ -29,9 +28,9 @@ render_terminal_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focuse
 	}
 }
 
-render_libvterm_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focused: bool, inset := 1) {
+render_ghostty_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focused: bool, inset := 1) {
 	term := &pane.terminal
-	if !term.active || term.vterm_screen == nil {
+	if !term.active || term.ghostty == nil || term.render_state == nil {
 		return
 	}
 
@@ -40,61 +39,78 @@ render_libvterm_contents :: proc(buffer: ^Screen_Buffer, pane: ^app.Pane, focuse
 	start_y := bounds.y + inset
 	max_width := terminal_min_int(term.width, terminal_max_int(bounds.width - inset * 2, 0))
 	max_height := terminal_min_int(term.height, terminal_max_int(bounds.height - inset * 2, 0))
-
-	terminal_vterm_apply_default_colors(buffer, term.vterm_state, term.vterm_screen)
-
-	cursor := vt.VTermPos{row = -1, col = -1}
-	if focused && term.vterm_state != nil {
-		vt.get_cursorpos(term.vterm_state, &cursor)
+	if max_width <= 0 || max_height <= 0 {
+		return
 	}
 
-	scrollback_lines := 0
-	if term.scrollback_cols > 0 {
-		scrollback_lines = len(term.scrollback) / term.scrollback_cols
+	terminal_ghostty_apply_default_colors(buffer, term.ghostty)
+
+	if vt.ghostty_render_state_update(term.render_state, term.ghostty) != .SUCCESS {
+		return
 	}
-	scroll_offset := terminal_min_int(term.scroll_offset, scrollback_lines)
-	total_rows := scrollback_lines + term.height
-	start_row := terminal_max_int(total_rows - max_height - scroll_offset, 0)
+	if vt.ghostty_render_state_get(term.render_state, .ROW_ITERATOR, &term.row_iterator) != .SUCCESS {
+		return
+	}
 
-	for y in 0 ..< max_height {
-		logical_row := start_row + y
-		for x in 0 ..< max_width {
-			cell: vt.VTermScreenCell
-			cell_ok := false
-			cursor_here := false
-
-			if logical_row < scrollback_lines {
-				if x < term.scrollback_cols {
-					cell = term.scrollback[logical_row * term.scrollback_cols + x]
-					cell_ok = true
-				}
-			} else {
-				screen_row := logical_row - scrollback_lines
-				ok := vt.get_cell(term.vterm_screen, vt.VTermPos{row = c.int(screen_row), col = c.int(x)}, &cell)
-				cell_ok = ok != 0
-				cursor_here = cursor.row == c.int(screen_row) && cursor.col == c.int(x)
+	cursor_x: u16 = 0
+	cursor_y: u16 = 0
+	cursor_visible := false
+	if focused {
+		has_value := false
+		if vt.ghostty_render_state_get(term.render_state, .CURSOR_VIEWPORT_HAS_VALUE, &has_value) == .SUCCESS && has_value {
+			if vt.ghostty_render_state_get(term.render_state, .CURSOR_VIEWPORT_X, &cursor_x) == .SUCCESS &&
+			   vt.ghostty_render_state_get(term.render_state, .CURSOR_VIEWPORT_Y, &cursor_y) == .SUCCESS {
+				cursor_visible = true
 			}
-
-			if !cell_ok {
-				continue
-			}
-			render_vterm_cell(buffer, term.vterm_screen, &cell, start_x + x, start_y + y, cursor_here)
 		}
+	}
+
+	row := 0
+	for row < max_height && vt.ghostty_render_state_row_iterator_next(term.row_iterator) {
+		if vt.ghostty_render_state_row_get(term.row_iterator, .CELLS, &term.row_cells) != .SUCCESS {
+			row += 1
+			continue
+		}
+
+		col := 0
+		for col < max_width && vt.ghostty_render_state_row_cells_next(term.row_cells) {
+			cursor_here := cursor_visible && u16(col) == cursor_x && u16(row) == cursor_y
+			render_ghostty_cell(buffer, term.row_cells, start_x + col, start_y + row, cursor_here)
+			col += 1
+		}
+		row += 1
 	}
 }
 
-render_vterm_cell :: proc(buffer: ^Screen_Buffer, screen: ^vt.VTermScreen, cell: ^vt.VTermScreenCell, x: int, y: int, cursor_here := false) {
-	glyph := terminal_vterm_glyph(cell.chars[0])
-	bold := vt.cell_is_bold(cell)
-	fg := cell.fg
-	bg := cell.bg
-	emit_defaults := false
-	if vt.cell_is_reverse(cell) || cursor_here {
-		fg, bg = bg, fg
-		emit_defaults = true
+render_ghostty_cell :: proc(buffer: ^Screen_Buffer, row_cells: vt.GhosttyRenderStateRowCells, x: int, y: int, cursor_here := false) {
+	glyph := terminal_ghostty_cell_rune(row_cells)
+
+	style := vt.GhosttyStyle{size = size_of(vt.GhosttyStyle)}
+	has_style := vt.ghostty_render_state_row_cells_get(row_cells, .STYLE, &style) == .SUCCESS
+	bold := has_style && style.bold
+	inverse := has_style && style.inverse
+
+	fg_set, fg_r, fg_g, fg_b := terminal_ghostty_cell_color(row_cells, .FG_COLOR)
+	bg_set, bg_r, bg_g, bg_b := terminal_ghostty_cell_color(row_cells, .BG_COLOR)
+
+	if inverse || cursor_here {
+		swap_fg_set := bg_set
+		swap_fg_r, swap_fg_g, swap_fg_b := bg_r, bg_g, bg_b
+		if !swap_fg_set {
+			swap_fg_r, swap_fg_g, swap_fg_b = buffer.background_r, buffer.background_g, buffer.background_b
+		}
+
+		bg_set = fg_set
+		bg_r, bg_g, bg_b = fg_r, fg_g, fg_b
+		if !bg_set {
+			bg_r, bg_g, bg_b = buffer.foreground_r, buffer.foreground_g, buffer.foreground_b
+		}
+
+		fg_set = true
+		fg_r, fg_g, fg_b = swap_fg_r, swap_fg_g, swap_fg_b
+		bg_set = true
 	}
-	fg_set, fg_r, fg_g, fg_b := terminal_vterm_foreground_color(buffer, screen, &fg, emit_defaults)
-	bg_set, bg_r, bg_g, bg_b := terminal_vterm_background_color(buffer, screen, &bg, emit_defaults)
+
 	screen_put_terminal_rune(
 		buffer,
 		x,
@@ -112,81 +128,58 @@ render_vterm_cell :: proc(buffer: ^Screen_Buffer, screen: ^vt.VTermScreen, cell:
 	)
 }
 
-terminal_vterm_apply_default_colors :: proc(buffer: ^Screen_Buffer, state: ^vt.VTermState, screen: ^vt.VTermScreen) {
-	default_fg := vt.VTermColor {
-		type = u8(vt.VTermColor_Type.RGB),
-		red = buffer.foreground_r,
-		green = buffer.foreground_g,
-		blue = buffer.foreground_b,
-	}
-	default_bg := vt.VTermColor {
-		type = u8(vt.VTermColor_Type.RGB),
-		red = buffer.background_r,
-		green = buffer.background_g,
-		blue = buffer.background_b,
-	}
-
-	if state != nil {
-		vt.set_state_default_colors(state, &default_fg, &default_bg)
-		vt.set_bold_highbright(state, 0)
-		for index in 0 ..< len(buffer.palette) {
-			palette_color := vt.VTermColor {
-				type = u8(vt.VTermColor_Type.RGB),
-				red = buffer.palette[index].r,
-				green = buffer.palette[index].g,
-				blue = buffer.palette[index].b,
-			}
-			vt.set_palette_color(state, c.int(index), &palette_color)
-		}
-	}
-	if screen != nil {
-		vt.set_default_colors(screen, &default_fg, &default_bg)
-	}
-}
-
-terminal_vterm_foreground_color :: proc(buffer: ^Screen_Buffer, screen: ^vt.VTermScreen, color: ^vt.VTermColor, emit_default: bool) -> (bool, u8, u8, u8) {
-	if vt.color_is_default_fg(color) {
-		if emit_default {
-			return true, buffer.foreground_r, buffer.foreground_g, buffer.foreground_b
-		}
-		return false, 0, 0, 0
-	}
-	if vt.color_is_default_bg(color) {
-		if emit_default {
-			return true, buffer.background_r, buffer.background_g, buffer.background_b
-		}
-		return false, 0, 0, 0
-	}
-
-	converted := color^
-	vt.convert_color_to_rgb(screen, &converted)
-	return true, converted.red, converted.green, converted.blue
-}
-
-terminal_vterm_background_color :: proc(buffer: ^Screen_Buffer, screen: ^vt.VTermScreen, color: ^vt.VTermColor, emit_default: bool) -> (bool, u8, u8, u8) {
-	if vt.color_is_default_bg(color) {
-		if emit_default {
-			return true, buffer.background_r, buffer.background_g, buffer.background_b
-		}
-		return false, 0, 0, 0
-	}
-	if vt.color_is_default_fg(color) {
-		if emit_default {
-			return true, buffer.foreground_r, buffer.foreground_g, buffer.foreground_b
-		}
-		return false, 0, 0, 0
-	}
-
-	converted := color^
-	vt.convert_color_to_rgb(screen, &converted)
-	return true, converted.red, converted.green, converted.blue
-}
-
-terminal_vterm_glyph :: proc(value: u32) -> u32 {
-	if value == 0 {
+terminal_ghostty_cell_rune :: proc(row_cells: vt.GhosttyRenderStateRowCells) -> u32 {
+	graphemes_len: u32 = 0
+	if vt.ghostty_render_state_row_cells_get(row_cells, .GRAPHEMES_LEN, &graphemes_len) != .SUCCESS || graphemes_len == 0 {
 		return ' '
 	}
-	return value
+
+	codepoints: [8]u32
+	if vt.ghostty_render_state_row_cells_get(row_cells, .GRAPHEMES_BUF, &codepoints) != .SUCCESS {
+		return '?'
+	}
+	if codepoints[0] == 0 {
+		return ' '
+	}
+	return codepoints[0]
+}
+
+terminal_ghostty_cell_color :: proc(row_cells: vt.GhosttyRenderStateRowCells, data: vt.GhosttyRenderStateRowCellsData) -> (bool, u8, u8, u8) {
+	color: vt.GhosttyColorRgb
+	if vt.ghostty_render_state_row_cells_get(row_cells, data, &color) != .SUCCESS {
+		return false, 0, 0, 0
+	}
+	return true, color.r, color.g, color.b
+}
+
+terminal_ghostty_apply_default_colors :: proc(buffer: ^Screen_Buffer, ghostty: vt.GhosttyTerminal) {
+	default_fg := vt.GhosttyColorRgb {
+		r = buffer.foreground_r,
+		g = buffer.foreground_g,
+		b = buffer.foreground_b,
+	}
+	default_bg := vt.GhosttyColorRgb {
+		r = buffer.background_r,
+		g = buffer.background_g,
+		b = buffer.background_b,
+	}
+	vt.ghostty_terminal_set(ghostty, .COLOR_FOREGROUND, &default_fg)
+	vt.ghostty_terminal_set(ghostty, .COLOR_BACKGROUND, &default_bg)
+
+	// Keep ghostty's default palette for colors 16..255 and override the
+	// first 16 entries from the configured palette.
+	palette: [256]vt.GhosttyColorRgb
+	if vt.ghostty_terminal_get(ghostty, .COLOR_PALETTE_DEFAULT, &palette) != .SUCCESS {
+		return
+	}
+	for index in 0 ..< len(buffer.palette) {
+		palette[index] = vt.GhosttyColorRgb {
+			r = buffer.palette[index].r,
+			g = buffer.palette[index].g,
+			b = buffer.palette[index].b,
+		}
+	}
+	vt.ghostty_terminal_set(ghostty, .COLOR_PALETTE, &palette)
 }
 
 terminal_min_int :: proc(a: int, b: int) -> int {

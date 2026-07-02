@@ -14,22 +14,27 @@
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
             pkgs.sdl3
             pkgs.sdl3-ttf
-            pkgs.libvterm-neovim
           ];
           LIBRARY_PATH = pkgs.lib.makeLibraryPath [
             pkgs.sdl3
             pkgs.sdl3-ttf
-            pkgs.libvterm-neovim
           ];
-          NIX_LDFLAGS = "-L${pkgs.sdl3}/lib -L${pkgs.sdl3-ttf}/lib -L${pkgs.libvterm-neovim}/lib";
+          NIX_LDFLAGS = "-L${pkgs.sdl3}/lib -L${pkgs.sdl3-ttf}/lib";
           buildInputs = with pkgs; [
             odin
             ols
             sdl3
             sdl3-ttf
             fontconfig
-            libvterm-neovim
+            curl
+            git
+            xz
           ];
+          shellHook = ''
+            export GHOSTTY_PREFIX="$PWD/vendor/ghostty-vt/$(uname -s)-$(uname -m)"
+            export LIBRARY_PATH="$GHOSTTY_PREFIX/lib''${LIBRARY_PATH:+:$LIBRARY_PATH}"
+            export LD_LIBRARY_PATH="$GHOSTTY_PREFIX/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          '';
         };
       });
 }

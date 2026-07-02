@@ -12,15 +12,17 @@ The easiest way to get the required tools and libraries is with Nix:
 nix develop
 ```
 
-The development shell provides Odin, SDL3, SDL3_ttf, Fontconfig, and libvterm.
+The development shell provides Odin, SDL3, SDL3_ttf, and Fontconfig. Terminal emulation is backed by [libghostty-vt](https://ghostty.org), which is fetched and built locally into `vendor/ghostty-vt/<os>-<arch>` by `just ghostty-build` (any `just run`/`just build` recipe triggers it automatically). Building it requires Zig 0.15.2, which the recipes download into `.deps/` when `GHOSTTY_ZIG` is not set.
 
 ### macOS without Nix
 
 Install the dependencies with Homebrew:
 
 ```sh
-brew install odin sdl3 sdl3_ttf libvterm
+brew install odin sdl3 sdl3_ttf
 ```
+
+libghostty-vt is built from source via `just ghostty-build` (see above), so no Homebrew terminal library is needed. Building it requires the Xcode Command Line Tools (`xcode-select --install`), which Homebrew already depends on.
 
 Then source the macOS environment helper before building or running:
 

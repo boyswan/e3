@@ -4,7 +4,7 @@ import vt "../terminal"
 
 Terminal_Backend :: enum {
 	Simple,
-	Libvterm,
+	Ghostty,
 }
 
 Terminal_Handle :: struct {
@@ -16,14 +16,10 @@ Terminal_Handle :: struct {
 	height:             int,
 	spawn_error_logged: bool,
 
-	vterm:        ^vt.VTerm,
-	vterm_state:  ^vt.VTermState,
-	vterm_screen: ^vt.VTermScreen,
-
-	scrollback:       [dynamic]vt.VTermScreenCell,
-	scrollback_cols:  int,
-	scroll_offset:    int,
-	max_scrollback:   int,
+	ghostty:      vt.GhosttyTerminal,
+	render_state: vt.GhosttyRenderState,
+	row_iterator: vt.GhosttyRenderStateRowIterator,
+	row_cells:    vt.GhosttyRenderStateRowCells,
 
 	cursor_x: int,
 	cursor_y: int,
