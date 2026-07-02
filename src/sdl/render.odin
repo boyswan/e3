@@ -354,18 +354,92 @@ resolve_font_path :: proc(config: render.Renderer_Config) -> string {
 		font_family = "monospace"
 	}
 
+	path := resolve_font_path_with_system(font_family)
+	if path != "" {
+		return path
+	}
+
 	state, stdout, stderr, err := os.process_exec(os.Process_Desc {
 		command = []string{"fc-match", "-f", "%{file}", font_family},
 	}, context.temp_allocator)
 	_ = stderr
 	if err == nil && state.success && len(stdout) > 0 {
-		path := strings.trim_space(string(stdout))
+		path = strings.trim_space(string(stdout))
 		if path != "" {
 			return path
 		}
 	}
 
 	return ""
+}
+
+when ODIN_OS == .Darwin {
+	foreign import corefoundation "system:CoreFoundation.framework"
+	foreign import coretext "system:CoreText.framework"
+
+	CFTypeRef :: rawptr
+	CFStringRef :: rawptr
+	CFURLRef :: rawptr
+	CTFontRef :: rawptr
+
+	kCFStringEncodingUTF8 :: u32(0x08000100)
+
+	foreign corefoundation {
+		CFStringCreateWithCString :: proc(alloc: rawptr, c_str: cstring, encoding: u32) -> CFStringRef ---
+		CFRelease :: proc(value: CFTypeRef) ---
+		CFURLGetFileSystemRepresentation :: proc(url: CFURLRef, resolve_against_base: u8, buffer: [^]u8, max_buffer_len: c.long) -> u8 ---
+	}
+
+	foreign coretext {
+		CTFontCreateWithName :: proc(name: CFStringRef, size: f64, matrix_ptr: rawptr) -> CTFontRef ---
+		CTFontCopyAttribute :: proc(font: CTFontRef, attribute: CFStringRef) -> CFTypeRef ---
+	}
+
+	resolve_font_path_with_system :: proc(font_family: string) -> string {
+		font_name_c := strings.clone_to_cstring(font_family, context.temp_allocator)
+		font_name := CFStringCreateWithCString(nil, font_name_c, kCFStringEncodingUTF8)
+		if font_name == nil {
+			return ""
+		}
+		defer CFRelease(font_name)
+
+		font := CTFontCreateWithName(font_name, 12, nil)
+		if font == nil {
+			return ""
+		}
+		defer CFRelease(font)
+
+		url_attribute := CFStringCreateWithCString(nil, "NSFontURLAttribute", kCFStringEncodingUTF8)
+		if url_attribute == nil {
+			return ""
+		}
+		defer CFRelease(url_attribute)
+
+		url := CFURLRef(CTFontCopyAttribute(font, url_attribute))
+		if url == nil {
+			return ""
+		}
+		defer CFRelease(url)
+
+		buffer: [4096]u8
+		if CFURLGetFileSystemRepresentation(url, 1, &buffer[0], c.long(len(buffer))) == 0 {
+			return ""
+		}
+
+		path_len := 0
+		for path_len < len(buffer) && buffer[path_len] != 0 {
+			path_len += 1
+		}
+		if path_len == 0 {
+			return ""
+		}
+
+		return strings.clone(string(buffer[:path_len]), context.temp_allocator)
+	}
+} else {
+	resolve_font_path_with_system :: proc(font_family: string) -> string {
+		return ""
+	}
 }
 
 draw_font_cell :: proc(state: ^State, x: int, cell_y: int, cell: render.Cell, fg_r: int, fg_g: int, fg_b: int, bg_r: int, bg_g: int, bg_b: int, offset_x := 0, offset_y := 0) {

@@ -5,7 +5,7 @@ import "base:runtime"
 import vt "../terminal"
 import posix "core:sys/posix"
 
-when ODIN_OS == .Linux {
+when ODIN_OS == .Linux || ODIN_OS == .Darwin {
 	foreign import libutil "system:util"
 } else {
 	foreign import libutil "system:c"
@@ -21,7 +21,11 @@ foreign libc {
 	ioctl :: proc(fd: c.int, request: c.ulong, argp: rawptr) -> c.int ---
 }
 
-TIOCSWINSZ :: c.ulong(0x5414)
+when ODIN_OS == .Darwin {
+	TIOCSWINSZ :: c.ulong(0x80087467)
+} else {
+	TIOCSWINSZ :: c.ulong(0x5414)
+}
 
 Pty_Winsize :: struct {
 	row:    u16,

@@ -14,6 +14,23 @@ nix develop
 
 The development shell provides Odin, SDL3, SDL3_ttf, Fontconfig, and libvterm.
 
+### macOS without Nix
+
+Install the dependencies with Homebrew:
+
+```sh
+brew install odin sdl3 sdl3_ttf libvterm
+```
+
+Then source the macOS environment helper before building or running:
+
+```sh
+source scripts/macos-env.sh
+odin run src
+```
+
+macOS uses CoreText for `font.family` lookup, so Fontconfig is not required. If Option/Alt keybindings conflict with your keyboard layout, set `input.mod: "super"` in `config.yaml` to use Command instead.
+
 ## Run
 
 From the project root:

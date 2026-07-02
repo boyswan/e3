@@ -8,7 +8,11 @@ foreign libc {
 	ioctl :: proc(fd: c.int, request: c.ulong, argp: rawptr) -> c.int ---
 }
 
-TIOCGWINSZ :: c.ulong(0x5413)
+when ODIN_OS == .Darwin {
+	TIOCGWINSZ :: c.ulong(0x40087468)
+} else {
+	TIOCGWINSZ :: c.ulong(0x5413)
+}
 
 Winsize :: struct {
 	row:    u16,

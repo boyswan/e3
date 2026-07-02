@@ -1,7 +1,7 @@
 # e3 configuration
 
 font:
-  # Resolved through Fontconfig. Use `fc-match <family>` to preview.
+  # Resolved by native font lookup on macOS and Fontconfig elsewhere.
   family: "MesloLGL Nerd Font"
   # Optional explicit font file. Leave empty to use `family`.
   path: ""
