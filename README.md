@@ -27,6 +27,16 @@ Then source the macOS environment helper before building or running:
 ```sh
 source scripts/macos-env.sh
 odin run src
+# or, for the TTY renderer:
+odin run src -- --tty
+```
+
+With `just` installed, the equivalent recipes are:
+
+```sh
+just macos-run
+just macos-tty
+just macos-build
 ```
 
 macOS uses CoreText for `font.family` lookup, so Fontconfig is not required. If Option/Alt keybindings conflict with your keyboard layout, set `input.mod: "super"` in `config.yaml` to use Command instead.

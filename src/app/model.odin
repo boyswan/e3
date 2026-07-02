@@ -10,10 +10,11 @@ Terminal_Backend :: enum {
 Terminal_Handle :: struct {
 	backend: Terminal_Backend,
 	active:  bool,
-	pty_fd:  int,
-	pid:     int,
-	width:   int,
-	height:  int,
+	pty_fd:             int,
+	pid:                int,
+	width:              int,
+	height:             int,
+	spawn_error_logged: bool,
 
 	vterm:        ^vt.VTerm,
 	vterm_state:  ^vt.VTermState,

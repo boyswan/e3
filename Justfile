@@ -8,6 +8,10 @@ _default:
 run:
     odin run src
 
+# Run e3 with the TTY renderer
+tty:
+    odin run src -- --tty
+
 # Build e3 using the Nix/direnv environment on Linux
 build:
     odin build src -out:e3
@@ -19,6 +23,10 @@ macos-check:
 # Run e3 on macOS without Nix
 macos-run:
     source scripts/macos-env.sh && odin run src
+
+# Run e3 with the TTY renderer on macOS without Nix
+macos-tty:
+    source scripts/macos-env.sh && odin run src -- --tty
 
 # Build e3 on macOS without Nix
 macos-build:

@@ -1,6 +1,7 @@
 package app
 
 import "core:c"
+import "core:fmt"
 import "base:runtime"
 import vt "../terminal"
 import posix "core:sys/posix"
@@ -67,6 +68,10 @@ terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) ->
 	master: c.int
 	pid := forkpty(&master, nil, nil, &winsize)
 	if pid < 0 {
+		if !term.spawn_error_logged {
+			fmt.eprintln("e3: failed to spawn shell with forkpty")
+			term.spawn_error_logged = true
+		}
 		return false
 	}
 
@@ -85,6 +90,7 @@ terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) ->
 	}
 
 	term.active = true
+	term.spawn_error_logged = false
 	term.pty_fd = int(master)
 	term.pid = int(pid)
 	terminal_resize_grid(term, width, height)

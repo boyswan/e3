@@ -1,6 +1,7 @@
 package sdl
 
 import "core:c"
+import "core:fmt"
 import "core:os"
 import "core:strings"
 import domain "../app"
@@ -59,6 +60,7 @@ begin :: proc(state: ^State, config: render.Renderer_Config) -> bool {
 	}
 
 	if !sdl3.Init(sdl3.INIT_VIDEO) {
+		fmt.eprintln("e3: SDL_Init failed:", sdl3.GetError())
 		return false
 	}
 	state.initialized = true
@@ -67,6 +69,7 @@ begin :: proc(state: ^State, config: render.Renderer_Config) -> bool {
 	sdl_renderer: ^sdl3.Renderer
 	window_flags := sdl3.WindowFlags{.RESIZABLE}
 	if !sdl3.CreateWindowAndRenderer("e3", 1000, 700, window_flags, &window, &sdl_renderer) {
+		fmt.eprintln("e3: SDL_CreateWindowAndRenderer failed:", sdl3.GetError())
 		sdl3.Quit()
 		state.initialized = false
 		return false
@@ -295,8 +298,7 @@ draw_cell_foreground :: proc(state: ^State, surface: ^render.Screen_Buffer, x: i
 		return
 	}
 
-	if state.font != nil {
-		draw_font_cell(state, x, cell_y, cell, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b, offset_x, offset_y)
+	if state.font != nil && draw_font_cell(state, x, cell_y, cell, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b, offset_x, offset_y) {
 		return
 	}
 
@@ -318,30 +320,53 @@ draw_cell_foreground :: proc(state: ^State, surface: ^render.Screen_Buffer, x: i
 
 init_font :: proc(state: ^State, config: render.Renderer_Config) {
 	if !ttf.Init() {
+		fmt.eprintln("e3: TTF_Init failed:", sdl3.GetError())
 		return
 	}
 	state.ttf_initialized = true
 
 	font_path := resolve_font_path(config)
-	if font_path == "" {
+	if font_path != "" && open_font_path(state, font_path, config.font_size) {
 		return
 	}
 
-	font_path_c := strings.clone_to_cstring(font_path, context.temp_allocator)
-	state.font = ttf.OpenFont(font_path_c, config.font_size)
-	if state.font != nil {
-		ttf.SetFontHinting(state.font, .MONO)
-		state.font_ascent = int(ttf.GetFontAscent(state.font))
-		state.font_height = int(ttf.GetFontHeight(state.font))
+	if font_path == "" {
+		fmt.eprintln("e3: could not resolve font family:", config.font_family)
+	} else {
+		fmt.eprintln("e3: failed to open font:", font_path, sdl3.GetError())
+	}
 
-		minx, maxx, miny, maxy, advance: c.int
-		if ttf.GetGlyphMetrics(state.font, 'M', &minx, &maxx, &miny, &maxy, &advance) {
-			state.cell_width = max_int(int(advance), 1)
-		}
-		if state.font_height > 0 {
-			state.cell_height = state.font_height
+	for fallback_index in 0 ..< fallback_font_family_count() {
+		fallback_family := fallback_font_family(fallback_index)
+		fallback_path := resolve_font_path_for_family(fallback_family)
+		if fallback_path != "" && open_font_path(state, fallback_path, config.font_size) {
+			fmt.eprintln("e3: using fallback font:", fallback_family)
+			return
 		}
 	}
+
+	fmt.eprintln("e3: no usable TTF font found; falling back to SDL debug text")
+}
+
+open_font_path :: proc(state: ^State, font_path: string, font_size: f32) -> bool {
+	font_path_c := strings.clone_to_cstring(font_path, context.temp_allocator)
+	state.font = ttf.OpenFont(font_path_c, font_size)
+	if state.font == nil {
+		return false
+	}
+
+	ttf.SetFontHinting(state.font, .MONO)
+	state.font_ascent = int(ttf.GetFontAscent(state.font))
+	state.font_height = int(ttf.GetFontHeight(state.font))
+
+	minx, maxx, miny, maxy, advance: c.int
+	if ttf.GetGlyphMetrics(state.font, 'M', &minx, &maxx, &miny, &maxy, &advance) {
+		state.cell_width = max_int(int(advance), 1)
+	}
+	if state.font_height > 0 {
+		state.cell_height = state.font_height
+	}
+	return true
 }
 
 resolve_font_path :: proc(config: render.Renderer_Config) -> string {
@@ -354,6 +379,10 @@ resolve_font_path :: proc(config: render.Renderer_Config) -> string {
 		font_family = "monospace"
 	}
 
+	return resolve_font_path_for_family(font_family)
+}
+
+resolve_font_path_for_family :: proc(font_family: string) -> string {
 	path := resolve_font_path_with_system(font_family)
 	if path != "" {
 		return path
@@ -371,6 +400,32 @@ resolve_font_path :: proc(config: render.Renderer_Config) -> string {
 	}
 
 	return ""
+}
+
+when ODIN_OS == .Darwin {
+	fallback_font_family_count :: proc() -> int {
+		return 3
+	}
+
+	fallback_font_family :: proc(index: int) -> string {
+		switch index {
+		case 0:
+			return "Menlo"
+		case 1:
+			return "Monaco"
+		case 2:
+			return "Courier New"
+		}
+		return "Menlo"
+	}
+} else {
+	fallback_font_family_count :: proc() -> int {
+		return 1
+	}
+
+	fallback_font_family :: proc(index: int) -> string {
+		return "monospace"
+	}
 }
 
 when ODIN_OS == .Darwin {
@@ -442,15 +497,15 @@ when ODIN_OS == .Darwin {
 	}
 }
 
-draw_font_cell :: proc(state: ^State, x: int, cell_y: int, cell: render.Cell, fg_r: int, fg_g: int, fg_b: int, bg_r: int, bg_g: int, bg_b: int, offset_x := 0, offset_y := 0) {
+draw_font_cell :: proc(state: ^State, x: int, cell_y: int, cell: render.Cell, fg_r: int, fg_g: int, fg_b: int, bg_r: int, bg_g: int, bg_b: int, offset_x := 0, offset_y := 0) -> bool {
 	rune := cell_rune(cell)
 	if rune == 0 || rune == ' ' {
-		return
+		return true
 	}
 
 	entry := get_glyph_texture(state, rune, u8(fg_r), u8(fg_g), u8(fg_b), u8(bg_r), u8(bg_g), u8(bg_b))
 	if entry == nil || entry.texture == nil {
-		return
+		return false
 	}
 
 	dst := sdl3.FRect {
@@ -460,6 +515,7 @@ draw_font_cell :: proc(state: ^State, x: int, cell_y: int, cell: render.Cell, fg
 		h = entry.height,
 	}
 	sdl3.RenderTexture(state.renderer, entry.texture, nil, &dst)
+	return true
 }
 
 cell_rune :: proc(cell: render.Cell) -> u32 {
