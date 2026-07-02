@@ -61,7 +61,15 @@ terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) ->
 	}
 
 	when ODIN_OS == .Darwin {
-		return terminal_spawn_shell_pipe(term, width, height)
+		term.active = true
+		term.spawn_error_logged = false
+		term.pty_fd = -1
+		term.input_fd = -1
+		term.output_fd = -1
+		terminal_resize_grid(term, width, height)
+		message := transmute([]byte)string("macOS shell spawning is disabled in this build while the PTY crash is isolated.\r\nUse SDL/TTY layout commands; panes are placeholders.\r\n")
+		terminal_write_output(term, message)
+		return true
 	} else {
 		winsize := Pty_Winsize {
 			row = u16(height),
@@ -261,7 +269,7 @@ terminal_destroy :: proc(term: ^Terminal_Handle) {
 }
 
 terminal_poll_read :: proc(term: ^Terminal_Handle) -> bool {
-	if !term.active {
+	if !term.active || term.output_fd < 0 {
 		return false
 	}
 
@@ -286,7 +294,7 @@ terminal_poll_read :: proc(term: ^Terminal_Handle) -> bool {
 }
 
 terminal_write_input :: proc(term: ^Terminal_Handle, data: []byte) -> bool {
-	if !term.active || len(data) == 0 {
+	if !term.active || term.input_fd < 0 || len(data) == 0 {
 		return false
 	}
 
@@ -334,7 +342,7 @@ terminal_write_libvterm_output :: proc(term: ^Terminal_Handle, data: []byte) {
 }
 
 terminal_drain_libvterm_output :: proc(term: ^Terminal_Handle) {
-	if term.vterm == nil || !term.active {
+	if term.vterm == nil || !term.active || term.input_fd < 0 {
 		return
 	}
 
