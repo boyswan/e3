@@ -2,7 +2,9 @@ package terminal
 
 import "core:c"
 
-foreign import libvterm "system:vterm"
+when ODIN_OS != .Darwin {
+	foreign import libvterm "system:vterm"
+}
 
 VTERM_MAX_CHARS_PER_CELL :: 6
 
@@ -78,46 +80,73 @@ VTermDamageSize :: enum c.int {
 	Scroll,
 }
 
-@(default_calling_convention = "c", link_prefix = "vterm_")
-foreign libvterm {
-	check_version :: proc(major: c.int, minor: c.int) ---
+when ODIN_OS != .Darwin {
+	@(default_calling_convention = "c", link_prefix = "vterm_")
+	foreign libvterm {
+		check_version :: proc(major: c.int, minor: c.int) ---
 
-	new  :: proc(rows: c.int, cols: c.int) -> ^VTerm ---
-	free :: proc(vt: ^VTerm) ---
+		new  :: proc(rows: c.int, cols: c.int) -> ^VTerm ---
+		free :: proc(vt: ^VTerm) ---
 
-	get_size :: proc(vt: ^VTerm, rows: ^c.int, cols: ^c.int) ---
-	set_size :: proc(vt: ^VTerm, rows: c.int, cols: c.int) ---
+		get_size :: proc(vt: ^VTerm, rows: ^c.int, cols: ^c.int) ---
+		set_size :: proc(vt: ^VTerm, rows: c.int, cols: c.int) ---
 
-	get_utf8 :: proc(vt: ^VTerm) -> c.int ---
-	set_utf8 :: proc(vt: ^VTerm, is_utf8: c.int) ---
+		get_utf8 :: proc(vt: ^VTerm) -> c.int ---
+		set_utf8 :: proc(vt: ^VTerm, is_utf8: c.int) ---
 
-	input_write :: proc(vt: ^VTerm, bytes: [^]u8, len: c.size_t) -> c.size_t ---
+		input_write :: proc(vt: ^VTerm, bytes: [^]u8, len: c.size_t) -> c.size_t ---
 
-	output_get_buffer_current :: proc(vt: ^VTerm) -> c.size_t ---
-	output_read :: proc(vt: ^VTerm, buffer: [^]u8, len: c.size_t) -> c.size_t ---
+		output_get_buffer_current :: proc(vt: ^VTerm) -> c.size_t ---
+		output_read :: proc(vt: ^VTerm, buffer: [^]u8, len: c.size_t) -> c.size_t ---
 
-	obtain_state :: proc(vt: ^VTerm) -> ^VTermState ---
-	obtain_screen :: proc(vt: ^VTerm) -> ^VTermScreen ---
-}
+		obtain_state :: proc(vt: ^VTerm) -> ^VTermState ---
+		obtain_screen :: proc(vt: ^VTerm) -> ^VTermScreen ---
+	}
 
-@(default_calling_convention = "c", link_prefix = "vterm_state_")
-foreign libvterm {
-	get_cursorpos :: proc(state: ^VTermState, cursorpos: ^VTermPos) ---
-	@(link_name = "vterm_state_set_default_colors") set_state_default_colors :: proc(state: ^VTermState, default_fg: ^VTermColor, default_bg: ^VTermColor) ---
-	@(link_name = "vterm_state_set_palette_color") set_palette_color :: proc(state: ^VTermState, index: c.int, color: ^VTermColor) ---
-	@(link_name = "vterm_state_set_bold_highbright") set_bold_highbright :: proc(state: ^VTermState, bold_is_highbright: c.int) ---
-}
+	@(default_calling_convention = "c", link_prefix = "vterm_state_")
+	foreign libvterm {
+		get_cursorpos :: proc(state: ^VTermState, cursorpos: ^VTermPos) ---
+		@(link_name = "vterm_state_set_default_colors") set_state_default_colors :: proc(state: ^VTermState, default_fg: ^VTermColor, default_bg: ^VTermColor) ---
+		@(link_name = "vterm_state_set_palette_color") set_palette_color :: proc(state: ^VTermState, index: c.int, color: ^VTermColor) ---
+		@(link_name = "vterm_state_set_bold_highbright") set_bold_highbright :: proc(state: ^VTermState, bold_is_highbright: c.int) ---
+	}
 
-@(default_calling_convention = "c", link_prefix = "vterm_screen_")
-foreign libvterm {
-	flush_damage :: proc(screen: ^VTermScreen) ---
-	set_damage_merge :: proc(screen: ^VTermScreen, size: VTermDamageSize) ---
-	reset :: proc(screen: ^VTermScreen, hard: c.int) ---
-	get_cell :: proc(screen: ^VTermScreen, pos: VTermPos, cell: ^VTermScreenCell) -> c.int ---
-	convert_color_to_rgb :: proc(screen: ^VTermScreen, color: ^VTermColor) ---
-	set_default_colors :: proc(screen: ^VTermScreen, default_fg: ^VTermColor, default_bg: ^VTermColor) ---
-	set_callbacks :: proc(screen: ^VTermScreen, callbacks: ^VTermScreenCallbacks, user: rawptr) ---
-	enable_altscreen :: proc(screen: ^VTermScreen, altscreen: c.int) ---
+	@(default_calling_convention = "c", link_prefix = "vterm_screen_")
+	foreign libvterm {
+		flush_damage :: proc(screen: ^VTermScreen) ---
+		set_damage_merge :: proc(screen: ^VTermScreen, size: VTermDamageSize) ---
+		reset :: proc(screen: ^VTermScreen, hard: c.int) ---
+		get_cell :: proc(screen: ^VTermScreen, pos: VTermPos, cell: ^VTermScreenCell) -> c.int ---
+		convert_color_to_rgb :: proc(screen: ^VTermScreen, color: ^VTermColor) ---
+		set_default_colors :: proc(screen: ^VTermScreen, default_fg: ^VTermColor, default_bg: ^VTermColor) ---
+		set_callbacks :: proc(screen: ^VTermScreen, callbacks: ^VTermScreenCallbacks, user: rawptr) ---
+		enable_altscreen :: proc(screen: ^VTermScreen, altscreen: c.int) ---
+	}
+} else {
+	check_version :: proc(major: c.int, minor: c.int) {}
+	new :: proc(rows: c.int, cols: c.int) -> ^VTerm { return nil }
+	free :: proc(vt: ^VTerm) {}
+	get_size :: proc(vt: ^VTerm, rows: ^c.int, cols: ^c.int) {}
+	set_size :: proc(vt: ^VTerm, rows: c.int, cols: c.int) {}
+	get_utf8 :: proc(vt: ^VTerm) -> c.int { return 0 }
+	set_utf8 :: proc(vt: ^VTerm, is_utf8: c.int) {}
+	input_write :: proc(vt: ^VTerm, bytes: [^]u8, len: c.size_t) -> c.size_t { return 0 }
+	output_get_buffer_current :: proc(vt: ^VTerm) -> c.size_t { return 0 }
+	output_read :: proc(vt: ^VTerm, buffer: [^]u8, len: c.size_t) -> c.size_t { return 0 }
+	obtain_state :: proc(vt: ^VTerm) -> ^VTermState { return nil }
+	obtain_screen :: proc(vt: ^VTerm) -> ^VTermScreen { return nil }
+	get_cursorpos :: proc(state: ^VTermState, cursorpos: ^VTermPos) {}
+	set_state_default_colors :: proc(state: ^VTermState, default_fg: ^VTermColor, default_bg: ^VTermColor) {}
+	set_palette_color :: proc(state: ^VTermState, index: c.int, color: ^VTermColor) {}
+	set_bold_highbright :: proc(state: ^VTermState, bold_is_highbright: c.int) {}
+	flush_damage :: proc(screen: ^VTermScreen) {}
+	set_damage_merge :: proc(screen: ^VTermScreen, size: VTermDamageSize) {}
+	reset :: proc(screen: ^VTermScreen, hard: c.int) {}
+	get_cell :: proc(screen: ^VTermScreen, pos: VTermPos, cell: ^VTermScreenCell) -> c.int { return 0 }
+	convert_color_to_rgb :: proc(screen: ^VTermScreen, color: ^VTermColor) {}
+	set_default_colors :: proc(screen: ^VTermScreen, default_fg: ^VTermColor, default_bg: ^VTermColor) {}
+	set_callbacks :: proc(screen: ^VTermScreen, callbacks: ^VTermScreenCallbacks, user: rawptr) {}
+	enable_altscreen :: proc(screen: ^VTermScreen, altscreen: c.int) {}
 }
 
 color_is_indexed :: proc(color: ^VTermColor) -> bool {

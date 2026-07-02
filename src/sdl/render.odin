@@ -194,8 +194,10 @@ present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Re
 		}
 	}
 
-	if app != nil {
-		draw_native_chrome(state, surface, app, mode, output_pixel_width, output_pixel_height)
+	when ODIN_OS != .Darwin {
+		if app != nil {
+			draw_native_chrome(state, surface, app, mode, output_pixel_width, output_pixel_height)
+		}
 	}
 
 	sdl3.RenderPresent(state.renderer)

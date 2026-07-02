@@ -40,6 +40,7 @@ main :: proc() {
 	input_mode := input.Input_Mode.Normal
 	running := true
 	for running {
+		native_chrome := native_chrome_enabled(renderer_kind)
 		domain.poll_all_terminals(&state)
 
 		new_width, new_height := tty.size_or_default(80, 24)
@@ -51,7 +52,7 @@ main :: proc() {
 
 		terminal_width_padding := 0
 		terminal_height_padding := 0
-		if renderer_kind == .SDL3 {
+		if native_chrome {
 			content_inset := config.renderer.native_pane_padding_px + config.renderer.native_pane_border_px
 			terminal_width_padding = ceil_div(content_inset * 2, renderer.cell_width(&r))
 			terminal_height_padding = ceil_div(content_inset * 2, renderer.cell_height(&r))
@@ -62,7 +63,7 @@ main :: proc() {
 			&state,
 			domain.Rect{x = 0, y = 0, width = renderer.width(&r), height = renderer.height(&r)},
 			input_mode,
-			renderer_kind == .SDL3,
+			native_chrome,
 			terminal_width_padding,
 			terminal_height_padding,
 		)
@@ -116,6 +117,18 @@ read_next_action :: proc(
 		native.wait(16)
 	}
 	return action
+}
+
+native_chrome_enabled :: proc(kind: renderer.Kind) -> bool {
+	if kind != .SDL3 {
+		return false
+	}
+
+	when ODIN_OS == .Darwin {
+		return false
+	} else {
+		return true
+	}
 }
 
 ceil_div :: proc(value: int, divisor: int) -> int {
