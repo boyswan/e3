@@ -60,116 +60,38 @@ terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) ->
 		return false
 	}
 
-	when ODIN_OS == .Darwin {
-		term.active = true
-		term.spawn_error_logged = false
-		term.pty_fd = -1
-		term.input_fd = -1
-		term.output_fd = -1
-		terminal_resize_grid(term, width, height)
-		message := transmute([]byte)string("macOS shell spawning is disabled in this build while the PTY crash is isolated.\r\nUse SDL/TTY layout commands; panes are placeholders.\r\n")
-		terminal_write_output(term, message)
-		return true
-	} else {
-		winsize := Pty_Winsize {
-			row = u16(height),
-			col = u16(width),
-		}
-
-		master: c.int
-		pid := forkpty(&master, nil, nil, &winsize)
-		if pid < 0 {
-			if !term.spawn_error_logged {
-				fmt.eprintln("e3: failed to spawn shell with forkpty")
-				term.spawn_error_logged = true
-			}
-			return false
-		}
-
-		if pid == 0 {
-			_ = posix.setenv("TERM", "xterm-256color", true)
-			_ = posix.setenv("COLORTERM", "truecolor", true)
-
-			shell := posix.getenv("SHELL")
-			if shell == nil {
-				shell = "/bin/sh"
-			}
-
-			argv := [?]cstring{shell, nil}
-			posix.execvp(argv[0], raw_data(argv[:]))
-			posix._exit(127)
-		}
-
-		term.active = true
-		term.spawn_error_logged = false
-		term.pty_fd = int(master)
-		term.input_fd = int(master)
-		term.output_fd = int(master)
-		term.pid = int(pid)
-		terminal_resize_grid(term, width, height)
-		return true
-	}
-}
-
-terminal_spawn_shell_pipe :: proc(term: ^Terminal_Handle, width: int, height: int) -> bool {
-	stdin_pipe: [2]posix.FD
-	stdout_pipe: [2]posix.FD
-	if posix.pipe(&stdin_pipe) != .OK {
-		if !term.spawn_error_logged {
-			fmt.eprintln("e3: failed to create stdin pipe")
-			term.spawn_error_logged = true
-		}
-		return false
-	}
-	if posix.pipe(&stdout_pipe) != .OK {
-		posix.close(stdin_pipe[0])
-		posix.close(stdin_pipe[1])
-		if !term.spawn_error_logged {
-			fmt.eprintln("e3: failed to create stdout pipe")
-			term.spawn_error_logged = true
-		}
-		return false
+	winsize := Pty_Winsize {
+		row = u16(height),
+		col = u16(width),
 	}
 
-	shell := posix.getenv("SHELL")
-	if shell == nil {
-		shell = "/bin/sh"
-	}
-
-	pid := posix.fork()
+	master: c.int
+	pid := forkpty(&master, nil, nil, &winsize)
 	if pid < 0 {
-		posix.close(stdin_pipe[0])
-		posix.close(stdin_pipe[1])
-		posix.close(stdout_pipe[0])
-		posix.close(stdout_pipe[1])
 		if !term.spawn_error_logged {
-			fmt.eprintln("e3: failed to fork shell")
+			fmt.eprintln("e3: failed to spawn shell with forkpty")
 			term.spawn_error_logged = true
 		}
 		return false
 	}
 
 	if pid == 0 {
-		posix.close(stdin_pipe[1])
-		posix.close(stdout_pipe[0])
-		posix.dup2(stdin_pipe[0], posix.FD(0))
-		posix.dup2(stdout_pipe[1], posix.FD(1))
-		posix.dup2(stdout_pipe[1], posix.FD(2))
-		posix.close(stdin_pipe[0])
-		posix.close(stdout_pipe[1])
+		_ = posix.setenv("TERM", "xterm-256color", true)
+		_ = posix.setenv("COLORTERM", "truecolor", true)
 
-		argv := [?]cstring{shell, "-i", nil}
+		shell := posix.getenv("SHELL")
+		if shell == nil {
+			shell = "/bin/sh"
+		}
+
+		argv := [?]cstring{shell, nil}
 		posix.execvp(argv[0], raw_data(argv[:]))
 		posix._exit(127)
 	}
 
-	posix.close(stdin_pipe[0])
-	posix.close(stdout_pipe[1])
 	term.active = true
 	term.spawn_error_logged = false
-	term.pty_fd = -1
-	term.input_fd = int(stdin_pipe[1])
-	term.output_fd = int(stdout_pipe[0])
+	term.pty_fd = int(master)
 	term.pid = int(pid)
 	terminal_resize_grid(term, width, height)
 	return true
@@ -232,7 +154,7 @@ terminal_resize_libvterm :: proc(term: ^Terminal_Handle, width: int, height: int
 }
 
 terminal_resize_pty :: proc(term: ^Terminal_Handle, width: int, height: int) {
-	if term.active && term.pty_fd >= 0 {
+	if term.active {
 		winsize := Pty_Winsize {
 			row = u16(height),
 			col = u16(width),
@@ -249,12 +171,7 @@ terminal_clear_grid :: proc(term: ^Terminal_Handle) {
 
 terminal_destroy :: proc(term: ^Terminal_Handle) {
 	if term.active {
-		if term.input_fd >= 0 {
-			posix.close(posix.FD(term.input_fd))
-		}
-		if term.output_fd >= 0 && term.output_fd != term.input_fd {
-			posix.close(posix.FD(term.output_fd))
-		}
+		posix.close(posix.FD(term.pty_fd))
 	}
 	if term.cells != nil {
 		delete(term.cells)
@@ -269,19 +186,19 @@ terminal_destroy :: proc(term: ^Terminal_Handle) {
 }
 
 terminal_poll_read :: proc(term: ^Terminal_Handle) -> bool {
-	if !term.active || term.output_fd < 0 {
+	if !term.active {
 		return false
 	}
 
 	poll_fd := posix.pollfd {
-		fd = posix.FD(term.output_fd),
+		fd = posix.FD(term.pty_fd),
 		events = {.IN},
 	}
 
 	changed := false
 	for posix.poll(&poll_fd, 1, 0) > 0 {
 		buffer: [4096]byte
-		count := posix.read(posix.FD(term.output_fd), raw_data(buffer[:]), c.size_t(len(buffer)))
+		count := posix.read(posix.FD(term.pty_fd), raw_data(buffer[:]), c.size_t(len(buffer)))
 		if count <= 0 {
 			break
 		}
@@ -294,7 +211,7 @@ terminal_poll_read :: proc(term: ^Terminal_Handle) -> bool {
 }
 
 terminal_write_input :: proc(term: ^Terminal_Handle, data: []byte) -> bool {
-	if !term.active || term.input_fd < 0 || len(data) == 0 {
+	if !term.active || len(data) == 0 {
 		return false
 	}
 
@@ -302,7 +219,7 @@ terminal_write_input :: proc(term: ^Terminal_Handle, data: []byte) -> bool {
 	for total_written < len(data) {
 		remaining := data[total_written:]
 		written := posix.write(
-			posix.FD(term.input_fd),
+			posix.FD(term.pty_fd),
 			raw_data(remaining),
 			c.size_t(len(remaining)),
 		)
@@ -342,7 +259,7 @@ terminal_write_libvterm_output :: proc(term: ^Terminal_Handle, data: []byte) {
 }
 
 terminal_drain_libvterm_output :: proc(term: ^Terminal_Handle) {
-	if term.vterm == nil || !term.active || term.input_fd < 0 {
+	if term.vterm == nil || !term.active {
 		return
 	}
 
@@ -352,7 +269,7 @@ terminal_drain_libvterm_output :: proc(term: ^Terminal_Handle) {
 		if count == 0 {
 			return
 		}
-		posix.write(posix.FD(term.input_fd), raw_data(buffer[:count]), count)
+		posix.write(posix.FD(term.pty_fd), raw_data(buffer[:count]), count)
 	}
 }
 

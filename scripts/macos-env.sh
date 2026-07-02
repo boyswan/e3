@@ -8,12 +8,12 @@ set -euo pipefail
 
 if ! command -v brew >/dev/null 2>&1; then
   echo "Homebrew is required. Install it from https://brew.sh, then run:" >&2
-  echo "  brew install odin sdl3 sdl3_ttf" >&2
+  echo "  brew install odin sdl3 sdl3_ttf libvterm" >&2
   return 1 2>/dev/null || exit 1
 fi
 
 missing=()
-for formula in odin sdl3 sdl3_ttf; do
+for formula in odin sdl3 sdl3_ttf libvterm; do
   if ! brew list --formula "$formula" >/dev/null 2>&1; then
     missing+=("$formula")
   fi
@@ -27,9 +27,12 @@ fi
 
 sdl3_prefix="$(brew --prefix sdl3)"
 sdl3_ttf_prefix="$(brew --prefix sdl3_ttf)"
+libvterm_prefix="$(brew --prefix libvterm)"
+
 lib_paths=(
   "$sdl3_prefix/lib"
   "$sdl3_ttf_prefix/lib"
+  "$libvterm_prefix/lib"
 )
 
 joined_lib_paths="$(IFS=:; echo "${lib_paths[*]}")"

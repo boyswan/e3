@@ -26,7 +26,7 @@ macos-run:
 
 # Run e3 with the TTY renderer on macOS without Nix
 macos-tty:
-    source scripts/macos-env.sh && trap 'stty sane; printf "\033[0m\033[?25h\033[?1049l"' EXIT && odin run src_tty
+    source scripts/macos-env.sh && odin run src -- --tty
 
 # Build e3 on macOS without Nix
 macos-build:
@@ -35,7 +35,3 @@ macos-build:
 # Print the macOS environment setup command for interactive shells
 macos-env:
     @echo 'source scripts/macos-env.sh'
-
-# Show the debug log written by macOS/Linux runs
-log:
-    @tail -200 /tmp/e3.log || true

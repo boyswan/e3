@@ -11,8 +11,6 @@ Terminal_Handle :: struct {
 	backend: Terminal_Backend,
 	active:  bool,
 	pty_fd:             int,
-	input_fd:           int,
-	output_fd:          int,
 	pid:                int,
 	width:              int,
 	height:             int,

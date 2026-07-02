@@ -4,7 +4,6 @@ import "core:c"
 import "core:fmt"
 import "core:os"
 import "core:strings"
-import logger "../debuglog"
 import domain "../app"
 import input "../input"
 import render "../render"
@@ -56,24 +55,19 @@ make_state :: proc() -> State {
 }
 
 begin :: proc(state: ^State, config: render.Renderer_Config) -> bool {
-	logger.line("sdl: begin")
 	if state.renderer != nil {
-		logger.line("sdl: begin already initialized")
 		return true
 	}
 
-	logger.line("sdl: Init")
 	if !sdl3.Init(sdl3.INIT_VIDEO) {
 		fmt.eprintln("e3: SDL_Init failed:", sdl3.GetError())
 		return false
 	}
 	state.initialized = true
-	logger.line("sdl: Init ok")
 
 	window: ^sdl3.Window
 	sdl_renderer: ^sdl3.Renderer
 	window_flags := sdl3.WindowFlags{.RESIZABLE}
-	logger.line("sdl: CreateWindowAndRenderer")
 	if !sdl3.CreateWindowAndRenderer("e3", 1000, 700, window_flags, &window, &sdl_renderer) {
 		fmt.eprintln("e3: SDL_CreateWindowAndRenderer failed:", sdl3.GetError())
 		sdl3.Quit()
@@ -84,11 +78,8 @@ begin :: proc(state: ^State, config: render.Renderer_Config) -> bool {
 	state.window = window
 	state.renderer = sdl_renderer
 	state.native_border_px = config.native_pane_border_px
-	logger.line("sdl: window/renderer ok")
 	init_font(state, config)
-	logger.linef("sdl: font init complete font=%p cell=%dx%d", state.font, state.cell_width, state.cell_height)
 	_ = sdl3.StartTextInput(window)
-	logger.line("sdl: begin ok")
 	return true
 }
 
@@ -156,16 +147,9 @@ should_quit :: proc() -> bool {
 	return false
 }
 
-present_frame_logged := false
-
 present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Renderer_Config, app: ^domain.App = nil, mode := input.Input_Mode.Normal) {
 	if state.renderer == nil {
-		logger.line("sdl: present skipped nil renderer")
 		return
-	}
-	if !present_frame_logged {
-		logger.linef("sdl: first present surface=%dx%d cell=%dx%d font=%p", surface.width, surface.height, state.cell_width, state.cell_height, state.font)
-		present_frame_logged = true
 	}
 
 	bg_r, bg_g, bg_b := render.renderer_config_background(config)
@@ -210,10 +194,8 @@ present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Re
 		}
 	}
 
-	when ODIN_OS != .Darwin {
-		if app != nil {
-			draw_native_chrome(state, surface, app, mode, output_pixel_width, output_pixel_height)
-		}
+	if app != nil {
+		draw_native_chrome(state, surface, app, mode, output_pixel_width, output_pixel_height)
 	}
 
 	sdl3.RenderPresent(state.renderer)
@@ -337,16 +319,13 @@ draw_cell_foreground :: proc(state: ^State, surface: ^render.Screen_Buffer, x: i
 }
 
 init_font :: proc(state: ^State, config: render.Renderer_Config) {
-	logger.line("sdl: TTF_Init")
 	if !ttf.Init() {
 		fmt.eprintln("e3: TTF_Init failed:", sdl3.GetError())
 		return
 	}
 	state.ttf_initialized = true
-	logger.line("sdl: TTF_Init ok")
 
 	font_path := resolve_font_path(config)
-	logger.linef("sdl: resolved font path=%s", font_path)
 	if font_path != "" && open_font_path(state, font_path, config.font_size) {
 		return
 	}
@@ -370,11 +349,9 @@ init_font :: proc(state: ^State, config: render.Renderer_Config) {
 }
 
 open_font_path :: proc(state: ^State, font_path: string, font_size: f32) -> bool {
-	logger.linef("sdl: opening font %s size=%f", font_path, font_size)
 	font_path_c := strings.clone_to_cstring(font_path, context.temp_allocator)
 	state.font = ttf.OpenFont(font_path_c, font_size)
 	if state.font == nil {
-		logger.linef("sdl: OpenFont failed %s", sdl3.GetError())
 		return false
 	}
 
@@ -383,13 +360,12 @@ open_font_path :: proc(state: ^State, font_path: string, font_size: f32) -> bool
 	state.font_height = int(ttf.GetFontHeight(state.font))
 
 	minx, maxx, miny, maxy, advance: c.int
-	if ttf.GetGlyphMetrics(state.font, 'M', &minx, &maxx, &miny, &maxy, &advance) && advance >= 4 {
-		state.cell_width = int(advance)
+	if ttf.GetGlyphMetrics(state.font, 'M', &minx, &maxx, &miny, &maxy, &advance) {
+		state.cell_width = max_int(int(advance), 1)
 	}
-	if state.font_height >= 8 {
+	if state.font_height > 0 {
 		state.cell_height = state.font_height
 	}
-	logger.linef("sdl: OpenFont ok metrics ascent=%d height=%d advance=%d cell=%dx%d", state.font_ascent, state.font_height, advance, state.cell_width, state.cell_height)
 	return true
 }
 
@@ -569,8 +545,7 @@ get_glyph_texture :: proc(state: ^State, rune: u32, r: u8, g: u8, b: u8, bg_r: u
 
 	fg := sdl3.Color{r, g, b, 255}
 	bg := sdl3.Color{bg_r, bg_g, bg_b, 255}
-	_ = bg
-	surface := ttf.RenderText_Blended(state.font, cstring(&text[0]), c.size_t(text_len), fg)
+	surface := ttf.RenderText_LCD(state.font, cstring(&text[0]), c.size_t(text_len), fg, bg)
 	if surface == nil {
 		return nil
 	}

@@ -19,7 +19,7 @@ The development shell provides Odin, SDL3, SDL3_ttf, Fontconfig, and libvterm.
 Install the dependencies with Homebrew:
 
 ```sh
-brew install odin sdl3 sdl3_ttf
+brew install odin sdl3 sdl3_ttf libvterm
 ```
 
 Then source the macOS environment helper before building or running:

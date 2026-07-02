@@ -91,45 +91,40 @@ command_dump_tree :: proc() -> Command {
 }
 
 execute_command :: proc(app: ^App, command: Command) -> bool {
-	result := false
 	switch command.kind {
 	case .Set_Split_Right:
-		result = apply_split_context(app, .Split_Horizontal)
+		return apply_split_context(app, .Split_Horizontal)
 	case .Set_Split_Down:
-		result = apply_split_context(app, .Split_Vertical)
+		return apply_split_context(app, .Split_Vertical)
 	case .Open_Pane:
-		result = open_pane(app)
+		return open_pane(app)
 	case .Switch_Workspace:
-		result = switch_workspace(app, command.workspace_id)
+		return switch_workspace(app, command.workspace_id)
 	case .Focus:
-		result = focus_direction(app, command.direction)
+		return focus_direction(app, command.direction)
 	case .Resize_Grow_Width:
-		result = resize_dimension(app, .Split_Horizontal, 0.10)
+		return resize_dimension(app, .Split_Horizontal, 0.10)
 	case .Resize_Shrink_Width:
-		result = resize_dimension(app, .Split_Horizontal, -0.10)
+		return resize_dimension(app, .Split_Horizontal, -0.10)
 	case .Resize_Grow_Height:
-		result = resize_dimension(app, .Split_Vertical, 0.10)
+		return resize_dimension(app, .Split_Vertical, 0.10)
 	case .Resize_Shrink_Height:
-		result = resize_dimension(app, .Split_Vertical, -0.10)
+		return resize_dimension(app, .Split_Vertical, -0.10)
 	case .Move_Pane:
-		result = move_pane_direction(app, command.direction)
+		return move_pane_direction(app, command.direction)
 	case .Scroll_Pane:
-		result = scroll_focused_terminal(app, command.scroll_lines)
+		return scroll_focused_terminal(app, command.scroll_lines)
 	case .Layout_Toggle_Split:
-		result = layout_toggle_split(app)
+		return layout_toggle_split(app)
 	case .Layout_Tabbed:
-		result = layout_tabbed(app)
+		return layout_tabbed(app)
 	case .Layout_Stacking:
-		result = layout_stacking(app)
+		return layout_stacking(app)
 	case .Close_Pane:
-		result = close_focused_pane(app)
+		return close_focused_pane(app)
 	case .Dump_Tree:
-		result = dump_tree(app)
+		return dump_tree(app)
 	}
 
-	workspace := active_workspace(app)
-	if workspace != nil && workspace.root != nil {
-		cleanup_workspace(workspace)
-	}
-	return result
+	return false
 }

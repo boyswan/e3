@@ -28,14 +28,7 @@ workspace_name :: proc(id: int) -> string {
 make_pane :: proc(app: ^App) -> ^Pane {
 	pane := new(Pane)
 	pane.id = app.next_pane_id
-	when ODIN_OS == .Darwin {
-		// Homebrew's libvterm has shown ABI/runtime instability in the current
-		// macOS build path. Use the built-in parser by default on macOS so both
-		// SDL and TTY modes start reliably.
-		pane.terminal.backend = .Simple
-	} else {
-		pane.terminal.backend = .Libvterm
-	}
+	pane.terminal.backend = .Libvterm
 	pane.split_kind = .Split_Horizontal
 	pane.split_active = false
 	app.next_pane_id += 1
