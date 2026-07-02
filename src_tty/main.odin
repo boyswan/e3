@@ -26,11 +26,15 @@ main :: proc() {
 	defer render.destroy_screen_buffer(&surface)
 
 	logger.linef("src_tty: initial size=%dx%d", width, height)
+	logger.line("src_tty: enter_app_screen before")
 	tty.enter_app_screen()
+	logger.line("src_tty: enter_app_screen after")
 	defer tty.leave_app_screen()
 
 	mode: tty.Mode
+	logger.line("src_tty: enter_raw_mode before")
 	using_tty_mode := tty.enter_raw_mode(&mode)
+	logger.linef("src_tty: enter_raw_mode after ok=%v", using_tty_mode)
 	defer if using_tty_mode {
 		tty.restore_mode(&mode)
 	}
@@ -38,8 +42,15 @@ main :: proc() {
 	input_mode := input.Input_Mode.Normal
 	running := true
 	logged_first_frame := false
+	frame_index := 0
 	for running {
+		if frame_index < 3 {
+			logger.linef("src_tty: frame %d begin", frame_index)
+		}
 		domain.poll_all_terminals(&state)
+		if frame_index < 3 {
+			logger.linef("src_tty: frame %d polled terminals", frame_index)
+		}
 
 		new_width, new_height := tty.size_or_default(80, 24)
 		if new_width != surface.width || new_height != surface.height {
@@ -51,6 +62,9 @@ main :: proc() {
 			render.screen_set_bar_colors(&surface, config.renderer.bar)
 		}
 
+		if frame_index < 3 {
+			logger.linef("src_tty: frame %d render before", frame_index)
+		}
 		render.render_app(
 			&surface,
 			&state,
@@ -60,12 +74,19 @@ main :: proc() {
 			0,
 			0,
 		)
+		if frame_index < 3 {
+			logger.linef("src_tty: frame %d render after", frame_index)
+		}
 		tty.present(&surface)
+		if frame_index < 3 {
+			logger.linef("src_tty: frame %d present after", frame_index)
+		}
 		if !logged_first_frame {
 			logger.linef("src_tty: first frame presented size=%dx%d", surface.width, surface.height)
 			logged_first_frame = true
 		}
 
+		frame_index += 1
 		if !tty.wait(50) {
 			continue
 		}
