@@ -97,7 +97,14 @@ main :: proc() {
 		case .Quit:
 			running = false
 		case .Command:
-			domain.execute_command(&state, action.command)
+			logger.linef("main: command kind=%v direction=%v workspace=%d", action.command.kind, action.command.direction, action.command.workspace_id)
+			result := domain.execute_command(&state, action.command)
+			workspace := domain.active_workspace(&state)
+			focused := 0
+			if workspace != nil {
+				focused = workspace.focused_pane_id
+			}
+			logger.linef("main: command result=%v focused=%d", result, focused)
 		case .Pane_Input:
 			domain.write_focused_terminal(&state, action.input_data[:action.input_len])
 		case .Paste_Clipboard:
