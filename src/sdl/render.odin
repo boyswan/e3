@@ -360,10 +360,10 @@ open_font_path :: proc(state: ^State, font_path: string, font_size: f32) -> bool
 	state.font_height = int(ttf.GetFontHeight(state.font))
 
 	minx, maxx, miny, maxy, advance: c.int
-	if ttf.GetGlyphMetrics(state.font, 'M', &minx, &maxx, &miny, &maxy, &advance) {
-		state.cell_width = max_int(int(advance), 1)
+	if ttf.GetGlyphMetrics(state.font, 'M', &minx, &maxx, &miny, &maxy, &advance) && advance >= 4 {
+		state.cell_width = int(advance)
 	}
-	if state.font_height > 0 {
+	if state.font_height >= 8 {
 		state.cell_height = state.font_height
 	}
 	return true
@@ -545,7 +545,8 @@ get_glyph_texture :: proc(state: ^State, rune: u32, r: u8, g: u8, b: u8, bg_r: u
 
 	fg := sdl3.Color{r, g, b, 255}
 	bg := sdl3.Color{bg_r, bg_g, bg_b, 255}
-	surface := ttf.RenderText_LCD(state.font, cstring(&text[0]), c.size_t(text_len), fg, bg)
+	_ = bg
+	surface := ttf.RenderText_Blended(state.font, cstring(&text[0]), c.size_t(text_len), fg)
 	if surface == nil {
 		return nil
 	}
