@@ -2,6 +2,8 @@ package app
 
 import "core:c"
 import "core:fmt"
+import "core:strings"
+import "core:time"
 import vt "../terminal"
 import posix "core:sys/posix"
 
@@ -161,6 +163,9 @@ terminal_destroy :: proc(term: ^Terminal_Handle) {
 	}
 	if term.cells != nil {
 		delete(term.cells)
+	}
+	if len(term.title_cache) > 0 {
+		delete(term.title_cache)
 	}
 	if term.row_cells != nil {
 		vt.ghostty_render_state_row_cells_free(term.row_cells)
@@ -658,24 +663,48 @@ sync_pane_terminals :: proc(node: ^Node, inset := 1, extra_width_padding := 0, e
 	}
 }
 
+PANE_TITLE_REFRESH_INTERVAL :: 150 * time.Millisecond
+
 pane_title :: proc(pane: ^Pane) -> string {
 	if pane == nil {
 		return ""
 	}
 
 	term := &pane.terminal
-	if term.backend != .Ghostty || term.ghostty == nil {
+	if term.title_initialized && time.tick_since(term.title_refresh_tick) < PANE_TITLE_REFRESH_INTERVAL {
+		return term.title_cache
+	}
+
+	// Derive the title internally from the foreground process and cwd. This
+	// produces i3-like titles such as "~" and "~ vim" without shell hooks.
+	title := native_terminal_title(term)
+	if len(title) == 0 {
+		title = pane_osc_title(term)
+	}
+	if len(title) == 0 {
+		title = "~"
+	}
+
+	if title != term.title_cache {
+		if len(term.title_cache) > 0 {
+			delete(term.title_cache)
+		}
+		term.title_cache = strings.clone(title)
+	}
+	term.title_refresh_tick = time.tick_now()
+	term.title_initialized = true
+	return term.title_cache
+}
+
+pane_osc_title :: proc(term: ^Terminal_Handle) -> string {
+	if term == nil || term.backend != .Ghostty || term.ghostty == nil {
 		return ""
 	}
 
 	title: vt.GhosttyString
-	if vt.ghostty_terminal_get(term.ghostty, .TITLE, &title) != .SUCCESS {
+	if vt.ghostty_terminal_get(term.ghostty, .TITLE, &title) != .SUCCESS || title.ptr == nil || title.len == 0 {
 		return ""
 	}
-	if title.ptr == nil || title.len == 0 {
-		return ""
-	}
-
 	return string(title.ptr[:int(title.len)])
 }
 

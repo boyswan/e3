@@ -791,45 +791,7 @@ draw_native_chrome :: proc(state: ^State, surface: ^render.Screen_Buffer, app: ^
 	}
 
 	draw_native_pane_borders(state, surface, workspace.root, workspace.focused_pane_id, mode, output_pixel_width, output_pixel_height)
-	draw_native_tab_borders(state, surface, workspace.root)
 	draw_native_workspace_bar_borders(state, surface, app, output_pixel_height)
-}
-
-draw_native_tab_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, node: ^domain.Node) {
-	if node == nil {
-		return
-	}
-
-	switch node.kind {
-	case .Pane:
-		return
-	case .Split_Horizontal, .Split_Vertical:
-		for child in node.children {
-			draw_native_tab_borders(state, surface, child)
-		}
-	case .Stacked, .Tabbed:
-		border := surface.bar.separator
-		for child in node.children {
-			deco := child.deco_bounds
-			if deco.width <= 0 || deco.height <= 0 {
-				continue
-			}
-			draw_native_rect_border(
-				state,
-				deco.x * state.cell_width,
-				deco.y * state.cell_height,
-				deco.width * state.cell_width,
-				deco.height * state.cell_height,
-				border,
-				1,
-			)
-		}
-
-		child := domain.focused_child(node)
-		if child != nil {
-			draw_native_tab_borders(state, surface, child)
-		}
-	}
 }
 
 draw_native_pane_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, node: ^domain.Node, focused_pane_id: int, mode: input.Input_Mode, output_pixel_width := 0, output_pixel_height := 0) {
@@ -962,30 +924,6 @@ draw_native_workspace_bar_borders :: proc(state: ^State, surface: ^render.Screen
 	_ = surface
 	_ = app
 	_ = output_pixel_height
-}
-
-draw_native_rect_border :: proc(state: ^State, x: int, y: int, width: int, height: int, color: render.RGB_Color, thickness: int) {
-	if width <= 0 || height <= 0 || thickness <= 0 {
-		return
-	}
-
-	sdl3.SetRenderDrawColor(state.renderer, color.r, color.g, color.b, 255)
-	t := f32(thickness)
-	left := f32(x)
-	top := f32(y)
-	right := f32(x + width - thickness)
-	bottom := f32(y + height - thickness)
-	w := f32(width)
-	h := f32(height)
-
-	top_rect := sdl3.FRect{x = left, y = top, w = w, h = t}
-	bottom_rect := sdl3.FRect{x = left, y = bottom, w = w, h = t}
-	left_rect := sdl3.FRect{x = left, y = top, w = t, h = h}
-	right_rect := sdl3.FRect{x = right, y = top, w = t, h = h}
-	sdl3.RenderFillRect(state.renderer, &top_rect)
-	sdl3.RenderFillRect(state.renderer, &bottom_rect)
-	sdl3.RenderFillRect(state.renderer, &left_rect)
-	sdl3.RenderFillRect(state.renderer, &right_rect)
 }
 
 native_pane_pixel_rect :: proc(state: ^State, surface: ^render.Screen_Buffer, bounds: domain.Rect, output_pixel_width := 0, output_pixel_height := 0) -> (int, int, int, int) {

@@ -1,5 +1,6 @@
 package app
 
+import "core:time"
 import vt "../terminal"
 
 Terminal_Backend :: enum {
@@ -20,6 +21,10 @@ Terminal_Handle :: struct {
 	render_state: vt.GhosttyRenderState,
 	row_iterator: vt.GhosttyRenderStateRowIterator,
 	row_cells:    vt.GhosttyRenderStateRowCells,
+
+	title_cache:        string,
+	title_refresh_tick: time.Tick,
+	title_initialized:  bool,
 
 	cursor_x: int,
 	cursor_y: int,
