@@ -22,9 +22,10 @@ Terminal_Handle :: struct {
 	row_iterator: vt.GhosttyRenderStateRowIterator,
 	row_cells:    vt.GhosttyRenderStateRowCells,
 
-	title_cache:        string,
-	title_refresh_tick: time.Tick,
-	title_initialized:  bool,
+	title_cache:             string,
+	title_refresh_tick:      time.Tick,
+	title_initialized:       bool,
+	title_uses_client_value: bool,
 
 	cursor_x: int,
 	cursor_y: int,

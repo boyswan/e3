@@ -71,9 +71,9 @@ when ODIN_OS == .Darwin {
 	#assert(size_of(Darwin_Proc_Vnodepath_Info) == 2352)
 }
 
-// native_terminal_title derives an i3-like title without requiring shell hooks:
-// abbreviated working directory, followed by the foreground process when the
-// pane is running something other than its shell (for example "~ vim").
+// native_terminal_title supplies e3's no-configuration fallback when the
+// terminal client has not provided an authoritative OSC title. It uses the
+// abbreviated working directory and foreground process (for example "~ vim").
 native_terminal_title :: proc(term: ^Terminal_Handle) -> string {
 	if term == nil || !term.active || term.pty_fd < 0 {
 		return "~"

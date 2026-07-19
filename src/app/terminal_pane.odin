@@ -665,27 +665,49 @@ sync_pane_terminals :: proc(node: ^Node, inset := 1, extra_width_padding := 0, e
 
 PANE_TITLE_REFRESH_INTERVAL :: 150 * time.Millisecond
 
+// Rendering reads cached title state, as i3's decoration renderer reads the
+// cached i3Window name. Title discovery and change detection happen while the
+// pane is polled, not while its decoration is drawn.
 pane_title :: proc(pane: ^Pane) -> string {
 	if pane == nil {
 		return ""
 	}
+	if len(pane.terminal.title_cache) > 0 {
+		return pane.terminal.title_cache
+	}
+	return "~"
+}
+
+refresh_pane_title :: proc(pane: ^Pane) -> bool {
+	if pane == nil || !pane.terminal.active {
+		return false
+	}
 
 	term := &pane.terminal
 	if term.title_initialized && time.tick_since(term.title_refresh_tick) < PANE_TITLE_REFRESH_INTERVAL {
-		return term.title_cache
+		return false
 	}
 
-	// Derive the title internally from the foreground process and cwd. This
-	// produces i3-like titles such as "~" and "~ vim" without shell hooks.
-	title := native_terminal_title(term)
-	if len(title) == 0 {
-		title = pane_osc_title(term)
-	}
-	if len(title) == 0 {
-		title = "~"
+	// i3 treats _NET_WM_NAME as the authoritative UTF-8 client title and only
+	// uses WM_NAME while no _NET_WM_NAME has been seen. OSC 0/2 is the terminal
+	// equivalent of that client title. Our native cwd/process title is the
+	// no-configuration fallback for panes whose client has never set a title.
+	title := pane_osc_title(term)
+	if len(title) > 0 {
+		term.title_uses_client_value = true
+	} else if term.title_uses_client_value {
+		// Match i3's empty-property behavior: keep the last authoritative title
+		// instead of replacing it with a fallback.
+		title = term.title_cache
+	} else {
+		title = native_terminal_title(term)
+		if len(title) == 0 {
+			title = "~"
+		}
 	}
 
-	if title != term.title_cache {
+	changed := title != term.title_cache
+	if changed {
 		if len(term.title_cache) > 0 {
 			delete(term.title_cache)
 		}
@@ -693,7 +715,7 @@ pane_title :: proc(pane: ^Pane) -> string {
 	}
 	term.title_refresh_tick = time.tick_now()
 	term.title_initialized = true
-	return term.title_cache
+	return changed
 }
 
 pane_osc_title :: proc(term: ^Terminal_Handle) -> string {
@@ -705,7 +727,13 @@ pane_osc_title :: proc(term: ^Terminal_Handle) -> string {
 	if vt.ghostty_terminal_get(term.ghostty, .TITLE, &title) != .SUCCESS || title.ptr == nil || title.len == 0 {
 		return ""
 	}
-	return string(title.ptr[:int(title.len)])
+
+	// i3 truncates X11 title properties at the first zero byte.
+	value := string(title.ptr[:int(title.len)])
+	if zero_index := strings.index_byte(value, 0); zero_index >= 0 {
+		value = value[:zero_index]
+	}
+	return value
 }
 
 poll_pane_terminals :: proc(node: ^Node) -> bool {
@@ -718,6 +746,7 @@ poll_pane_terminals :: proc(node: ^Node) -> bool {
 	case .Pane:
 		if node.pane != nil {
 			changed = terminal_poll_read(&node.pane.terminal)
+			changed = refresh_pane_title(node.pane) || changed
 		}
 	case .Split_Horizontal, .Split_Vertical:
 		for child in node.children {

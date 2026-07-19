@@ -244,8 +244,7 @@ node_title_width :: proc(node: ^domain.Node) -> int {
 		if node.pane == nil {
 			return 0
 		}
-		// i3 shows the process-set window title; fall back to the pane id
-		// when the terminal has not set one.
+		// Use the pane's cached client title or native cwd/process fallback.
 		if title := domain.pane_title(node.pane); len(title) > 0 {
 			return title_cell_width(title)
 		}
