@@ -65,7 +65,7 @@ dump_node :: proc(builder: ^strings.Builder, node: ^Node, depth: int, focused_pa
 
 		fmt.sbprintf(
 			builder,
-			" %s pane_id=%d bounds=(%d,%d %dx%d) split_active=%v split_kind=%v",
+			" %s pane_id=%d bounds=(%d,%d %dx%d) split_active=%v split_kind=%v title=%s",
 			focused_marker,
 			pane.id,
 			pane.bounds.x,
@@ -74,6 +74,7 @@ dump_node :: proc(builder: ^strings.Builder, node: ^Node, depth: int, focused_pa
 			pane.bounds.height,
 			pane.split_active,
 			pane.split_kind,
+			pane_title(pane),
 		)
 	}
 

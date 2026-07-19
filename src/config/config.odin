@@ -292,6 +292,24 @@ apply_input_value :: proc(key: string, value: string, config: ^Config) {
 		config.bindings.workspace_8 = value
 	case "workspace_9":
 		config.bindings.workspace_9 = value
+	case "move_to_workspace_1":
+		config.bindings.move_to_workspace_1 = value
+	case "move_to_workspace_2":
+		config.bindings.move_to_workspace_2 = value
+	case "move_to_workspace_3":
+		config.bindings.move_to_workspace_3 = value
+	case "move_to_workspace_4":
+		config.bindings.move_to_workspace_4 = value
+	case "move_to_workspace_5":
+		config.bindings.move_to_workspace_5 = value
+	case "move_to_workspace_6":
+		config.bindings.move_to_workspace_6 = value
+	case "move_to_workspace_7":
+		config.bindings.move_to_workspace_7 = value
+	case "move_to_workspace_8":
+		config.bindings.move_to_workspace_8 = value
+	case "move_to_workspace_9":
+		config.bindings.move_to_workspace_9 = value
 	}
 }
 

@@ -96,6 +96,25 @@ action_from_modified_key :: proc(key: byte) -> input.Action {
 		return input.Action{kind = .Command, command = domain.command_move_pane(.Right)}
 	case '1' ..= '9':
 		return input.Action{kind = .Command, command = domain.command_switch_workspace(int(key - '0'))}
+	// Alt+Shift+digit arrives as the shifted digit symbol (US layout).
+	case '!':
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(1)}
+	case '@':
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(2)}
+	case '#':
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(3)}
+	case '$':
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(4)}
+	case '%':
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(5)}
+	case '^':
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(6)}
+	case '&':
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(7)}
+	case '*':
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(8)}
+	case '(':
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(9)}
 	}
 
 	return input.Action{kind = .None}

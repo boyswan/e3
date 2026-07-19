@@ -41,6 +41,15 @@ Key_Bindings :: struct {
 	workspace_7:  string,
 	workspace_8:  string,
 	workspace_9:  string,
+	move_to_workspace_1: string,
+	move_to_workspace_2: string,
+	move_to_workspace_3: string,
+	move_to_workspace_4: string,
+	move_to_workspace_5: string,
+	move_to_workspace_6: string,
+	move_to_workspace_7: string,
+	move_to_workspace_8: string,
+	move_to_workspace_9: string,
 }
 
 key_bindings_default :: proc() -> Key_Bindings {
@@ -73,6 +82,15 @@ key_bindings_default :: proc() -> Key_Bindings {
 		workspace_7 = "7",
 		workspace_8 = "8",
 		workspace_9 = "9",
+		move_to_workspace_1 = "shift+1",
+		move_to_workspace_2 = "shift+2",
+		move_to_workspace_3 = "shift+3",
+		move_to_workspace_4 = "shift+4",
+		move_to_workspace_5 = "shift+5",
+		move_to_workspace_6 = "shift+6",
+		move_to_workspace_7 = "shift+7",
+		move_to_workspace_8 = "shift+8",
+		move_to_workspace_9 = "shift+9",
 	}
 }
 

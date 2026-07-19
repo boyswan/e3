@@ -129,6 +129,37 @@ switch_workspace :: proc(app: ^App, id: int) -> bool {
 	return true
 }
 
+workspace_index_of :: proc(app: ^App, id: int) -> int {
+	for index in 0 ..< len(app.workspaces) {
+		if app.workspaces[index].id == id {
+			return index
+		}
+	}
+	return -1
+}
+
+// Finds or creates a workspace without switching to it. The caller must
+// repair app.active_workspace_index afterwards: appending can both
+// reallocate app.workspaces and shift element indices.
+ensure_workspace :: proc(app: ^App, id: int) -> ^Workspace {
+	if id <= 0 {
+		return nil
+	}
+
+	if index := workspace_index_of(app, id); index >= 0 {
+		return &app.workspaces[index]
+	}
+
+	workspace := make_workspace(id)
+	insert_index := workspace_insert_index(app, id)
+	append(&app.workspaces, workspace)
+	for move_index := len(app.workspaces) - 1; move_index > insert_index; move_index -= 1 {
+		app.workspaces[move_index] = app.workspaces[move_index - 1]
+	}
+	app.workspaces[insert_index] = workspace
+	return &app.workspaces[insert_index]
+}
+
 workspace_insert_index :: proc(app: ^App, id: int) -> int {
 	for index in 0 ..< len(app.workspaces) {
 		if app.workspaces[index].id > id {

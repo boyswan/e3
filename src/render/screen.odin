@@ -140,6 +140,28 @@ screen_put_rgb :: proc(buffer: ^Screen_Buffer, x: int, y: int, glyph: string, fg
 	}
 }
 
+screen_put_rune_rgb :: proc(buffer: ^Screen_Buffer, x: int, y: int, rune: u32, fg: RGB_Color, bg: RGB_Color, bold := false) {
+	index, ok := screen_index(buffer, x, y)
+	if !ok {
+		return
+	}
+
+	buffer.cells[index] = Cell {
+		glyph = " ",
+		rune = rune,
+		bold = bold,
+		color = .Default,
+		fg_set = true,
+		fg_r = fg.r,
+		fg_g = fg.g,
+		fg_b = fg.b,
+		bg_set = true,
+		bg_r = bg.r,
+		bg_g = bg.g,
+		bg_b = bg.b,
+	}
+}
+
 screen_put_terminal :: proc(
 	buffer: ^Screen_Buffer,
 	x: int,

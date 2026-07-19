@@ -651,20 +651,32 @@ sync_pane_terminals :: proc(node: ^Node, inset := 1, extra_width_padding := 0, e
 		for child in node.children {
 			sync_pane_terminals(child, inset, extra_width_padding, extra_height_padding)
 		}
-	case .Stacked:
-		if len(node.children) == 0 {
-			return
-		}
-		index := node.focused_child_index
-		if index < 0 || index >= len(node.children) {
-			index = 0
-		}
-		sync_pane_terminals(node.children[index], inset, extra_width_padding, extra_height_padding)
-	case .Tabbed:
+	case .Stacked, .Tabbed:
 		for child in node.children {
 			sync_pane_terminals(child, inset, extra_width_padding, extra_height_padding)
 		}
 	}
+}
+
+pane_title :: proc(pane: ^Pane) -> string {
+	if pane == nil {
+		return ""
+	}
+
+	term := &pane.terminal
+	if term.backend != .Ghostty || term.ghostty == nil {
+		return ""
+	}
+
+	title: vt.GhosttyString
+	if vt.ghostty_terminal_get(term.ghostty, .TITLE, &title) != .SUCCESS {
+		return ""
+	}
+	if title.ptr == nil || title.len == 0 {
+		return ""
+	}
+
+	return string(title.ptr[:int(title.len)])
 }
 
 poll_pane_terminals :: proc(node: ^Node) -> bool {
@@ -682,16 +694,7 @@ poll_pane_terminals :: proc(node: ^Node) -> bool {
 		for child in node.children {
 			changed = poll_pane_terminals(child) || changed
 		}
-	case .Stacked:
-		if len(node.children) == 0 {
-			return false
-		}
-		index := node.focused_child_index
-		if index < 0 || index >= len(node.children) {
-			index = 0
-		}
-		changed = poll_pane_terminals(node.children[index])
-	case .Tabbed:
+	case .Stacked, .Tabbed:
 		for child in node.children {
 			changed = poll_pane_terminals(child) || changed
 		}

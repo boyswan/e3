@@ -283,6 +283,33 @@ mod_key_action :: proc(key: sdl3.Keycode, shift: bool, bindings: input.Key_Bindi
 	if key_matches(key, shift, bindings.workspace_9) {
 		return input.Action{kind = .Command, command = domain.command_switch_workspace(9)}
 	}
+	if key_matches(key, shift, bindings.move_to_workspace_1) {
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(1)}
+	}
+	if key_matches(key, shift, bindings.move_to_workspace_2) {
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(2)}
+	}
+	if key_matches(key, shift, bindings.move_to_workspace_3) {
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(3)}
+	}
+	if key_matches(key, shift, bindings.move_to_workspace_4) {
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(4)}
+	}
+	if key_matches(key, shift, bindings.move_to_workspace_5) {
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(5)}
+	}
+	if key_matches(key, shift, bindings.move_to_workspace_6) {
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(6)}
+	}
+	if key_matches(key, shift, bindings.move_to_workspace_7) {
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(7)}
+	}
+	if key_matches(key, shift, bindings.move_to_workspace_8) {
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(8)}
+	}
+	if key_matches(key, shift, bindings.move_to_workspace_9) {
+		return input.Action{kind = .Command, command = domain.command_move_pane_to_workspace(9)}
+	}
 
 	return input.Action{kind = .None}
 }

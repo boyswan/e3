@@ -40,8 +40,15 @@ GhosttyTerminalOption :: enum c.int {
 
 GhosttyTerminalData :: enum c.int {
 	INVALID                    = 0,
+	TITLE                 = 12,
 	COLOR_PALETTE         = 21,
 	COLOR_PALETTE_DEFAULT = 25,
+}
+
+// Borrowed byte string; valid until the next ghostty_terminal_vt_write/reset.
+GhosttyString :: struct {
+	ptr: [^]u8,
+	len: c.size_t,
 }
 
 GhosttyTerminalWritePtyFn :: proc "c" (terminal: GhosttyTerminal, userdata: rawptr, data: [^]u8, len: c.size_t)

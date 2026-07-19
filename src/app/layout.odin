@@ -1,13 +1,5 @@
 package app
 
-split_kind_from_direction :: proc(horizontal: bool) -> Node_Kind {
-	if horizontal {
-		return .Split_Horizontal
-	}
-
-	return .Split_Vertical
-}
-
 find_focused_node :: proc(node: ^Node, pane_id: int) -> ^Node {
 	if node == nil {
 		return nil
@@ -291,8 +283,11 @@ apply_split_context :: proc(app: ^App, kind: Node_Kind) -> bool {
 		return focus_node(workspace, focused)
 	}
 
-	if is_split_kind(parent.kind) && len(parent.children) == 1 {
+	// i3's tree_split converts any one-child parent (split, tabbed, or
+	// stacked) to the requested orientation instead of wrapping again.
+	if len(parent.children) == 1 {
 		parent.kind = kind
+		parent.last_split_kind = kind
 		return focus_node(workspace, focused)
 	}
 
@@ -348,61 +343,6 @@ open_pane :: proc(app: ^App) -> bool {
 	focused.pane.split_active = false
 	if !insert_child_after(parent, focused, new_node) {
 		return false
-	}
-
-	cleanup_workspace(workspace)
-	return focus_pane(workspace, new_pane)
-}
-
-split_focused_pane :: proc(app: ^App, horizontal: bool) -> bool {
-	workspace := active_workspace(app)
-	if workspace == nil || workspace.root == nil {
-		return false
-	}
-
-	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
-	if focused == nil || focused.kind != .Pane {
-		return false
-	}
-
-	kind := split_kind_from_direction(horizontal)
-	new_pane := make_pane(app)
-	new_node := make_pane_node(new_pane)
-
-	parent := focused.parent
-	if parent != nil && parent.kind == kind {
-		if !insert_child_after(parent, focused, new_node) {
-			return false
-		}
-
-		cleanup_workspace(workspace)
-		return focus_pane(workspace, new_pane)
-	}
-
-	container := make_container_node(kind)
-	container.parent = parent
-
-	focused.parent = container
-	new_node.parent = container
-
-	append(&container.children, focused)
-	append(&container.children, new_node)
-	append(&container.focus_order, new_node)
-	append(&container.focus_order, focused)
-	append(&container.weights, 1.0)
-	append(&container.weights, 1.0)
-	container.focused_child_index = 1
-
-	if parent == nil {
-		workspace.root = container
-	} else {
-		index := find_child_index(parent, focused)
-		if index < 0 {
-			return false
-		}
-
-		parent.children[index] = container
-		parent.focused_child_index = index
 	}
 
 	cleanup_workspace(workspace)
@@ -782,6 +722,12 @@ move_pane_direction :: proc(app: ^App, direction: Direction) -> bool {
 		return false
 	}
 
+	// i3's tree_move only redirects a lone workspace window to another
+	// output; with a single pane there is nowhere to move.
+	if count_panes(workspace.root) <= 1 {
+		return false
+	}
+
 	wanted_kind := orientation_from_direction(direction)
 	previous := is_previous_direction(direction)
 	current := focused
@@ -854,6 +800,93 @@ move_pane_direction :: proc(app: ^App, direction: Direction) -> bool {
 	}
 
 	return move_focused_to_new_workspace_split(workspace, focused, direction)
+}
+
+// i3's `move container to workspace N`: move the focused pane to workspace
+// N (creating it if needed) without switching to it. The pane is inserted
+// after the destination's focused leaf, becomes the destination's focused
+// pane, and focus on the source workspace falls back to the MRU pane.
+move_focused_pane_to_workspace :: proc(app: ^App, workspace_id: int) -> bool {
+	source := active_workspace(app)
+	if source == nil || source.root == nil || workspace_id <= 0 || source.id == workspace_id {
+		return false
+	}
+
+	focused := find_focused_node(source.root, source.focused_pane_id)
+	if focused == nil || focused.kind != .Pane || focused.pane == nil {
+		return false
+	}
+	source_id := source.id
+
+	target := ensure_workspace(app, workspace_id)
+	if target == nil {
+		return false
+	}
+
+	// ensure_workspace may reallocate/reindex app.workspaces; keep the
+	// source workspace active and re-fetch its pointer.
+	if index := workspace_index_of(app, source_id); index >= 0 {
+		app.active_workspace_index = index
+	}
+	source = active_workspace(app)
+	if source == nil || source.root == nil {
+		return false
+	}
+
+	if focused.parent == nil {
+		source.root = nil
+		source.focused_pane_id = 0
+	} else {
+		detach_node_from_parent(focused)
+	}
+	cleanup_workspace(source)
+
+	if target.root == nil {
+		focused.parent = nil
+		target.root = focused
+	} else {
+		anchor := find_focused_node(target.root, target.focused_pane_id)
+		if anchor == nil || anchor.kind != .Pane {
+			anchor = descend_focused(target.root)
+		}
+		if anchor == nil || anchor.kind != .Pane {
+			return false
+		}
+
+		anchor_parent := anchor.parent
+		if anchor_parent == nil {
+			container := make_container_node(target.default_split_kind)
+			anchor.parent = container
+			append(&container.children, anchor)
+			append(&container.focus_order, anchor)
+			append(&container.weights, 1.0)
+			container.focused_child_index = 0
+			target.root = container
+			anchor_parent = container
+		}
+
+		if !insert_child_after(anchor_parent, anchor, focused) {
+			return false
+		}
+	}
+
+	cleanup_workspace(target)
+	return focus_node(target, focused)
+}
+
+count_panes :: proc(node: ^Node) -> int {
+	if node == nil {
+		return 0
+	}
+	if node.kind == .Pane {
+		return 1
+	}
+
+	count := 0
+	for child in node.children {
+		count += count_panes(child)
+	}
+	return count
 }
 
 move_focused_to_new_workspace_split :: proc(workspace: ^Workspace, focused: ^Node, direction: Direction) -> bool {
@@ -998,6 +1031,12 @@ detach_node_from_parent :: proc(node: ^Node) -> (f32, bool) {
 		ordered_remove(&parent.weights, index)
 	}
 	node.parent = nil
+
+	// A pending split context lives in the one-child parent being detached
+	// from; it does not travel with the pane.
+	if node.kind == .Pane && node.pane != nil {
+		node.pane.split_active = false
+	}
 	return weight, true
 }
 

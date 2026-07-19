@@ -1,5 +1,7 @@
 package render
 
+import "core:unicode/utf8"
+
 import domain "../app"
 import input "../input"
 
@@ -41,6 +43,11 @@ render_workspace_bar :: proc(buffer: ^Screen_Buffer, state: ^domain.App, mode: i
 	bar_bg := buffer.bar.background
 	screen_set_range_background(buffer, bounds.x, bounds.y, bounds.width, bar_bg.r, bar_bg.g, bar_bg.b)
 
+	// i3bar draws the binding mode indicator before the workspace buttons.
+	if mode == .Resize {
+		cursor_x = render_workspace_button(buffer, cursor_x, bounds.y, "resize", buffer.bar.binding_mode, true)
+	}
+
 	for index in 0 ..< len(state.workspaces) {
 		workspace := &state.workspaces[index]
 		active := index == state.active_workspace_index
@@ -50,11 +57,6 @@ render_workspace_bar :: proc(buffer: ^Screen_Buffer, state: ^domain.App, mode: i
 		}
 
 		cursor_x = render_workspace_button(buffer, cursor_x, bounds.y, workspace.name, colors, active)
-	}
-
-	if mode == .Resize {
-		cursor_x = screen_put_text(buffer, cursor_x, bounds.y, " resize", true, .Split_Hint)
-		return
 	}
 
 	_ = cursor_x
@@ -229,7 +231,7 @@ render_tab_button :: proc(buffer: ^Screen_Buffer, child: ^domain.Node, x: int, y
 		return
 	}
 	start_x := x + max_int((width - title_width) / 2, 0)
-	render_node_title(buffer, child, start_x, y, colors.text, colors.background)
+	render_node_title(buffer, child, start_x, y, colors.text, colors.background, x + width)
 }
 
 node_title_width :: proc(node: ^domain.Node) -> int {
@@ -241,6 +243,11 @@ node_title_width :: proc(node: ^domain.Node) -> int {
 	case .Pane:
 		if node.pane == nil {
 			return 0
+		}
+		// i3 shows the process-set window title; fall back to the pane id
+		// when the terminal has not set one.
+		if title := domain.pane_title(node.pane); len(title) > 0 {
+			return title_cell_width(title)
 		}
 		return digit_count(node.pane.id)
 	case .Split_Horizontal, .Split_Vertical, .Stacked, .Tabbed:
@@ -257,7 +264,7 @@ node_title_width :: proc(node: ^domain.Node) -> int {
 	return 0
 }
 
-render_node_title :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, x: int, y: int, fg: RGB_Color, bg: RGB_Color) -> int {
+render_node_title :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, x: int, y: int, fg: RGB_Color, bg: RGB_Color, max_x: int) -> int {
 	if node == nil {
 		return x
 	}
@@ -266,24 +273,63 @@ render_node_title :: proc(buffer: ^Screen_Buffer, node: ^domain.Node, x: int, y:
 	switch node.kind {
 	case .Pane:
 		if node.pane != nil {
-			cursor_x = render_put_int_rgb(buffer, cursor_x, y, node.pane.id, fg, bg)
+			title := domain.pane_title(node.pane)
+			if len(title) > 0 {
+				cursor_x = render_title_text(buffer, cursor_x, y, title, fg, bg, max_x)
+			} else {
+				cursor_x = render_put_int_rgb(buffer, cursor_x, y, node.pane.id, fg, bg)
+			}
 		}
 	case .Split_Horizontal, .Split_Vertical, .Stacked, .Tabbed:
-		screen_put_rgb(buffer, cursor_x, y, node_title_layout_glyph(node.kind), fg, bg)
-		cursor_x += 1
-		screen_put_rgb(buffer, cursor_x, y, "[", fg, bg)
-		cursor_x += 1
+		cursor_x = put_title_cell(buffer, cursor_x, y, node_title_layout_glyph(node.kind), fg, bg, max_x)
+		cursor_x = put_title_cell(buffer, cursor_x, y, "[", fg, bg, max_x)
 		for index in 0 ..< len(node.children) {
 			if index > 0 {
-				screen_put_rgb(buffer, cursor_x, y, " ", fg, bg)
-				cursor_x += 1
+				cursor_x = put_title_cell(buffer, cursor_x, y, " ", fg, bg, max_x)
 			}
-			cursor_x = render_node_title(buffer, node.children[index], cursor_x, y, fg, bg)
+			cursor_x = render_node_title(buffer, node.children[index], cursor_x, y, fg, bg, max_x)
 		}
-		screen_put_rgb(buffer, cursor_x, y, "]", fg, bg)
-		cursor_x += 1
+		cursor_x = put_title_cell(buffer, cursor_x, y, "]", fg, bg, max_x)
 	}
 
+	return cursor_x
+}
+
+// Clips glyphs at max_x while still advancing the cursor so centering math
+// and recursion stay consistent.
+put_title_cell :: proc(buffer: ^Screen_Buffer, x: int, y: int, glyph: string, fg: RGB_Color, bg: RGB_Color, max_x: int) -> int {
+	if x < max_x {
+		screen_put_rgb(buffer, x, y, glyph, fg, bg)
+	}
+	return x + 1
+}
+
+title_cell_width :: proc(title: string) -> int {
+	width := 0
+	remaining := title
+	for len(remaining) > 0 {
+		r, size := utf8.decode_rune_in_string(remaining)
+		remaining = remaining[size:]
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		width += 1
+	}
+	return width
+}
+
+render_title_text :: proc(buffer: ^Screen_Buffer, x: int, y: int, title: string, fg: RGB_Color, bg: RGB_Color, max_x: int) -> int {
+	cursor_x := x
+	remaining := title
+	for len(remaining) > 0 && cursor_x < max_x {
+		r, size := utf8.decode_rune_in_string(remaining)
+		remaining = remaining[size:]
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		screen_put_rune_rgb(buffer, cursor_x, y, u32(r), fg, bg)
+		cursor_x += 1
+	}
 	return cursor_x
 }
 

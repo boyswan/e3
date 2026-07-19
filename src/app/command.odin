@@ -11,6 +11,7 @@ Command_Kind :: enum {
 	Resize_Grow_Height,
 	Resize_Shrink_Height,
 	Move_Pane,
+	Move_Pane_To_Workspace,
 	Scroll_Pane,
 	Layout_Toggle_Split,
 	Layout_Tabbed,
@@ -66,6 +67,10 @@ command_move_pane :: proc(direction: Direction) -> Command {
 	return Command{kind = .Move_Pane, direction = direction}
 }
 
+command_move_pane_to_workspace :: proc(id: int) -> Command {
+	return Command{kind = .Move_Pane_To_Workspace, workspace_id = id}
+}
+
 command_scroll_pane :: proc(lines: int) -> Command {
 	return Command{kind = .Scroll_Pane, scroll_lines = lines}
 }
@@ -112,6 +117,8 @@ execute_command :: proc(app: ^App, command: Command) -> bool {
 		return resize_dimension(app, .Split_Vertical, -0.10)
 	case .Move_Pane:
 		return move_pane_direction(app, command.direction)
+	case .Move_Pane_To_Workspace:
+		return move_focused_pane_to_workspace(app, command.workspace_id)
 	case .Scroll_Pane:
 		return scroll_focused_terminal(app, command.scroll_lines)
 	case .Layout_Toggle_Split:
