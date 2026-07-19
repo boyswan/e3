@@ -409,8 +409,10 @@ mouse_cell_position :: proc(state: ^State, surface: ^render.Screen_Buffer, mouse
 		return 0, 0, false
 	}
 
-	x := int(mouse_x) / state.cell_width
-	y := int(mouse_y) / state.cell_height
+	// Mouse events are delivered in window points; cell metrics are in backing
+	// pixels on high-density displays.
+	x := int(mouse_x * state.pixel_scale) / state.cell_width
+	y := int(mouse_y * state.pixel_scale) / state.cell_height
 	if x < 0 { x = 0 }
 	if y < 0 { y = 0 }
 	if x >= surface.width { x = surface.width - 1 }

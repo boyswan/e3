@@ -5,7 +5,7 @@ font:
   family: "MesloLGL Nerd Font"
   # Optional explicit font file. Leave empty to use `family`.
   path: ""
-  size: 24
+  size: 12
 
 window:
   background: "#232326"
@@ -49,8 +49,8 @@ palette:
 
 input:
   # alt/option/opt or super/gui/cmd/command/meta
-  # mod: "super"
-  mod: "alt"
+  mod: "super"
+  # mod: "alt"
 
   # Key names are matched with the configured mod key.
   # Use "shift+<key>" for shifted bindings.

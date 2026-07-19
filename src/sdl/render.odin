@@ -35,6 +35,7 @@ State :: struct {
 	cell_width:      int,
 	cell_height:     int,
 	text_scale:      f32,
+	pixel_scale:     f32,
 
 	selecting:       bool,
 	selection_valid: bool,
@@ -51,6 +52,7 @@ make_state :: proc() -> State {
 		cell_width = 11,
 		cell_height = 22,
 		text_scale = 1,
+		pixel_scale = 1,
 	}
 }
 
@@ -64,10 +66,14 @@ begin :: proc(state: ^State, config: render.Renderer_Config) -> bool {
 		return false
 	}
 	state.initialized = true
+	disable_native_menu_shortcuts()
 
 	window: ^sdl3.Window
 	sdl_renderer: ^sdl3.Renderer
-	window_flags := sdl3.WindowFlags{.RESIZABLE}
+	// Request a full-resolution backing store. Without this flag the drawable
+	// is point-sized (1000x700) on Retina displays and macOS upscales the whole
+	// window by 2x, blurring everything we draw.
+	window_flags := sdl3.WindowFlags{.RESIZABLE, .HIGH_PIXEL_DENSITY}
 	if !sdl3.CreateWindowAndRenderer("e3", 1000, 700, window_flags, &window, &sdl_renderer) {
 		fmt.eprintln("e3: SDL_CreateWindowAndRenderer failed:", sdl3.GetError())
 		sdl3.Quit()
@@ -80,7 +86,51 @@ begin :: proc(state: ^State, config: render.Renderer_Config) -> bool {
 	state.native_border_px = config.native_pane_border_px
 	init_font(state, config)
 	_ = sdl3.StartTextInput(window)
+	update_render_scale(state, config)
 	return true
+}
+
+update_render_scale :: proc(state: ^State, config: render.Renderer_Config) {
+	if state.renderer == nil || state.window == nil {
+		return
+	}
+
+	// density = drawable pixels / window points (2.0 on Retina with
+	// SDL_WINDOW_HIGH_PIXEL_DENSITY).
+	pixel_width, pixel_height: c.int
+	point_width, point_height: c.int
+	if !sdl3.GetCurrentRenderOutputSize(state.renderer, &pixel_width, &pixel_height) ||
+	   !sdl3.GetWindowSize(state.window, &point_width, &point_height) ||
+	   pixel_width <= 0 || point_width <= 0 {
+		return
+	}
+
+	density := f32(pixel_width) / f32(point_width)
+	if density < 0.05 {
+		return
+	}
+	if abs(density - state.pixel_scale) < 0.01 {
+		return
+	}
+	state.pixel_scale = density
+
+	if state.font != nil {
+		// Rasterize glyphs at the backing-store density so text is drawn at
+		// physical pixel resolution instead of being upscaled.
+		dpi := c.int(72 * density)
+		_ = ttf.SetFontSizeDPI(state.font, config.font_size, dpi, dpi)
+
+		state.font_ascent = int(ttf.GetFontAscent(state.font))
+		state.font_height = int(ttf.GetFontHeight(state.font))
+		minx, maxx, miny, maxy, advance: c.int
+		if ttf.GetGlyphMetrics(state.font, 'M', &minx, &maxx, &miny, &maxy, &advance) {
+			state.cell_width = max_int(int(advance), 1)
+		}
+		if state.font_height > 0 {
+			state.cell_height = state.font_height
+		}
+	}
+	destroy_glyph_cache(state)
 }
 
 destroy :: proc(state: ^State) {
@@ -152,7 +202,12 @@ present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Re
 		return
 	}
 
-	bg_r, bg_g, bg_b := render.renderer_config_background(config)
+	update_render_scale(state, config)
+
+	// Use the themed screen buffer as the clear color. Passing the large renderer
+	// config by value can yield corrupted color bytes on macOS/arm64; cells hide
+	// that everywhere except the residual pixels at the right and bottom edges.
+	bg_r, bg_g, bg_b := surface.background_r, surface.background_g, surface.background_b
 	_ = sdl3.SetRenderDrawBlendMode(state.renderer, sdl3.BLENDMODE_NONE)
 	sdl3.SetRenderDrawColor(state.renderer, bg_r, bg_g, bg_b, 255)
 	sdl3.RenderClear(state.renderer)
@@ -249,10 +304,10 @@ apply_selection_style :: proc(state: ^State, surface: ^render.Screen_Buffer, cel
 
 native_cell_offset :: proc(state: ^State, config: render.Renderer_Config, app: ^domain.App, x: int, y: int) -> (int, int) {
 	if app != nil && config.native_pane_padding_px > 0 {
+		_ = state
 		_, ok := native_cell_pane_bounds(app, x, y)
 		if ok {
-			content_inset := max_int(config.native_pane_padding_px + state.native_border_px, 0)
-			return content_inset, content_inset
+			return config.native_pane_padding_px, config.native_pane_padding_px
 		}
 	}
 	return 0, 0
@@ -366,6 +421,7 @@ open_font_path :: proc(state: ^State, font_path: string, font_size: f32) -> bool
 	if state.font_height > 0 {
 		state.cell_height = state.font_height
 	}
+	state.pixel_scale = 1
 	return true
 }
 
@@ -899,58 +955,13 @@ native_cell_pane_bounds_node :: proc(node: ^domain.Node, x: int, y: int) -> (dom
 }
 
 draw_native_workspace_bar_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, app: ^domain.App, output_pixel_height := 0) {
-	if surface.height <= 0 {
-		return
-	}
-
-	output_width := surface.width * state.cell_width
-	if state.renderer != nil {
-		pixel_width: c.int
-		pixel_height: c.int
-		if sdl3.GetRenderOutputSize(state.renderer, &pixel_width, &pixel_height) {
-			output_width = int(pixel_width)
-		}
-	}
-
-	workspace := domain.active_workspace(app)
-	if workspace == nil {
-		return
-	}
-
-	bar_top := (surface.height - 1) * state.cell_height
-	if output_pixel_height > 0 {
-		bar_top = max_int(output_pixel_height - state.cell_height, 0)
-	}
-
-	separator := surface.bar.separator
-	sdl3.SetRenderDrawColor(state.renderer, separator.r, separator.g, separator.b, 255)
-	bar_line := sdl3.FRect{x = 0, y = f32(bar_top), w = f32(output_width), h = 1}
-	sdl3.RenderFillRect(state.renderer, &bar_line)
-
-	cursor_x := 0
-	for index in 0 ..< len(app.workspaces) {
-		workspace_button := &app.workspaces[index]
-		colors := surface.bar.inactive_workspace
-		if index == app.active_workspace_index {
-			colors = surface.bar.focused_workspace
-		}
-
-		button_width := (len(workspace_button.name) + 2) * state.cell_width
-		if button_width <= 0 {
-			continue
-		}
-
-		draw_native_rect_border(
-			state,
-			cursor_x * state.cell_width,
-			bar_top,
-			button_width,
-			state.cell_height,
-			colors.border,
-			1,
-		)
-		cursor_x += len(workspace_button.name) + 2
-	}
+	// Workspace buttons already carry their themed background in the cell
+	// renderer. Native outlines here conflict with that fill and were used by
+	// the earlier border debugging pass.
+	_ = state
+	_ = surface
+	_ = app
+	_ = output_pixel_height
 }
 
 draw_native_rect_border :: proc(state: ^State, x: int, y: int, width: int, height: int, color: render.RGB_Color, thickness: int) {
