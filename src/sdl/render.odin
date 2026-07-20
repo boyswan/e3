@@ -463,30 +463,12 @@ resolve_font_path_for_family :: proc(font_family: string) -> string {
 	return ""
 }
 
-when ODIN_OS == .Darwin {
-	fallback_font_family_count :: proc() -> int {
-		return 3
-	}
+fallback_font_family_count :: proc() -> int {
+	return 1
+}
 
-	fallback_font_family :: proc(index: int) -> string {
-		switch index {
-		case 0:
-			return "Menlo"
-		case 1:
-			return "Monaco"
-		case 2:
-			return "Courier New"
-		}
-		return "Menlo"
-	}
-} else {
-	fallback_font_family_count :: proc() -> int {
-		return 1
-	}
-
-	fallback_font_family :: proc(index: int) -> string {
-		return "monospace"
-	}
+fallback_font_family :: proc(index: int) -> string {
+	return "monospace"
 }
 
 when ODIN_OS == .Darwin {
@@ -508,18 +490,25 @@ when ODIN_OS == .Darwin {
 
 	foreign coretext {
 		CTFontCreateWithName :: proc(name: CFStringRef, size: f64, matrix_ptr: rawptr) -> CTFontRef ---
+		CTFontCreateUIFontForLanguage :: proc(ui_type: c.int, size: f64, language: CFStringRef) -> CTFontRef ---
 		CTFontCopyAttribute :: proc(font: CTFontRef, attribute: CFStringRef) -> CFTypeRef ---
 	}
 
 	resolve_font_path_with_system :: proc(font_family: string) -> string {
-		font_name_c := strings.clone_to_cstring(font_family, context.temp_allocator)
-		font_name := CFStringCreateWithCString(nil, font_name_c, kCFStringEncodingUTF8)
-		if font_name == nil {
-			return ""
+		font: CTFontRef
+		if strings.equal_fold(font_family, "monospace") || strings.equal_fold(font_family, "system-monospace") {
+			// kCTFontUIFontUserFixedPitch asks CoreText for the user's system
+			// fixed-pitch UI font without naming an optional installed family.
+			font = CTFontCreateUIFontForLanguage(c.int(1), 14, nil)
+		} else {
+			font_name_c := strings.clone_to_cstring(font_family, context.temp_allocator)
+			font_name := CFStringCreateWithCString(nil, font_name_c, kCFStringEncodingUTF8)
+			if font_name == nil {
+				return ""
+			}
+			defer CFRelease(font_name)
+			font = CTFontCreateWithName(font_name, 14, nil)
 		}
-		defer CFRelease(font_name)
-
-		font := CTFontCreateWithName(font_name, 12, nil)
 		if font == nil {
 			return ""
 		}

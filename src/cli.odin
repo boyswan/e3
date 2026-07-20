@@ -5,7 +5,7 @@ import "core:os"
 import "core:strings"
 import posix "core:sys/posix"
 
-E3_VERSION :: #config(E3_VERSION, "0.1.4-dev")
+E3_VERSION :: #config(E3_VERSION, "0.1.5-dev")
 
 handle_metadata_args :: proc() -> bool {
 	for arg in os.args {

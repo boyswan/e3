@@ -117,14 +117,14 @@ Pass an explicit file with `--config`, `--config=...`, or `-c`; this takes prece
 just macos-run /path/to/config.yaml
 ```
 
-`config.example.yaml` documents all current options. To customize e3:
+`config.example.yaml` is the only shipped configuration and documents all current options. Built-in GUI defaults use the system's generic monospace font at 14 pt; no optional font family is required. To customize e3:
 
 ```sh
 mkdir -p ~/.config/e3
 cp config.example.yaml ~/.config/e3/config.yaml
 ```
 
-New panes execute `$SHELL` by default, falling back to `/bin/sh`. Override it with an executable path or name:
+New panes execute `$SHELL` by default, falling back to the account login shell and then `/bin/sh`. Override it with an executable path or name:
 
 ```yaml
 shell:

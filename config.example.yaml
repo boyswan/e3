@@ -1,21 +1,21 @@
 # e3 configuration
 
 font:
-  # Resolved by native font lookup on macOS and Fontconfig elsewhere.
-  # Use a family installed on the target machine.
+  # "monospace" uses the system's default fixed-pitch font: the user/system
+  # UI monospace font on macOS and Fontconfig's generic monospace elsewhere.
+  # A specifically installed family name may be used instead.
   family: "monospace"
-  # family: "MesloLGL Nerd Font"
   # Optional explicit font file. Leave empty to use `family`.
   path: ""
-  size: 12
+  size: 14
 
 window:
   background: "#232326"
   foreground: "#E1E1E1"
 
 shell:
-  # Defaults to $SHELL, then /bin/sh. The command may be an absolute path or
-  # an executable found through PATH.
+  # Defaults to $SHELL, then the account login shell, then /bin/sh. The
+  # command may be an absolute path or an executable found through PATH.
   # command: "/bin/zsh"
 
 pane:

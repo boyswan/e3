@@ -61,14 +61,11 @@ Renderer_Config :: struct {
 }
 
 renderer_default_config :: proc() -> Renderer_Config {
-	default_font_family := "monospace"
-	when ODIN_OS == .Darwin {
-		default_font_family = "Menlo"
-	}
-
 	config := Renderer_Config {
-		font_family = default_font_family,
-		font_size = 12,
+		// Generic monospace resolves to the user's system fixed-pitch font on
+		// macOS and Fontconfig's default monospace family elsewhere.
+		font_family = "monospace",
+		font_size = 14,
 		native_pane_padding_px = 10,
 		native_pane_border_px = 1,
 		background_set = true,
