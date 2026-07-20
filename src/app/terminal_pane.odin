@@ -80,6 +80,11 @@ terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) ->
 			shell = posix.getenv("SHELL")
 		}
 		if shell == nil {
+			if account := posix.getpwuid(posix.getuid()); account != nil {
+				shell = account.pw_shell
+			}
+		}
+		if shell == nil {
 			shell = "/bin/sh"
 		}
 

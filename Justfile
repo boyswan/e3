@@ -101,6 +101,37 @@ release version="0.1.0-dev": ghostty-build
     shasum -a 256 "$archive"; \
     echo "$archive"
 
+# Build a self-contained macOS application archive for the Homebrew cask.
+# Requires dylibbundler (`brew install dylibbundler`).
+release-app version="0.1.0-dev":
+    set -eu; \
+    if [ "$(uname -s)" != Darwin ]; then echo "release-app requires macOS" >&2; exit 1; fi; \
+    version="{{version}}"; \
+    platform="{{ghostty_platform}}"; \
+    just release "$version"; \
+    package_binary="$(pwd)/build/package/e3-$version-$platform/e3"; \
+    app_root="$(pwd)/build/app/$platform"; \
+    app_dir="$app_root/e3.app"; \
+    archive="$(pwd)/dist/e3-$version-$platform-app.zip"; \
+    rm -rf "$app_root" "$archive"; \
+    mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Frameworks" "$app_dir/Contents/Resources"; \
+    cp "$package_binary" "$app_dir/Contents/MacOS/e3"; \
+    sed "s/@VERSION@/$version/g" packaging/macos/Info.plist.in > "$app_dir/Contents/Info.plist"; \
+    cp config.example.yaml "$app_dir/Contents/Resources/"; \
+    cp LICENSE "$app_dir/Contents/Resources/"; \
+    iconset="$app_root/e3.iconset"; mkdir -p "$iconset"; \
+    icon_png="$app_root/e3-icon.png"; sips -s format png packaging/macos/icon.svg --out "$icon_png" >/dev/null; \
+    for entry in 16:icon_16x16.png 32:icon_16x16@2x.png 32:icon_32x32.png 64:icon_32x32@2x.png 128:icon_128x128.png 256:icon_128x128@2x.png 256:icon_256x256.png 512:icon_256x256@2x.png 512:icon_512x512.png 1024:icon_512x512@2x.png; do size="${entry%%:*}"; name="${entry#*:}"; sips -z "$size" "$size" "$icon_png" --out "$iconset/$name" >/dev/null; done; \
+    iconutil -c icns "$iconset" -o "$app_dir/Contents/Resources/e3.icns"; \
+    plutil -lint "$app_dir/Contents/Info.plist"; \
+    (cd "$app_dir" && dylibbundler -od -b -x Contents/MacOS/e3 -d Contents/Frameworks -p @executable_path/../Frameworks); \
+    if find "$app_dir/Contents" -type f -print0 | xargs -0 file | grep 'Mach-O' | cut -d: -f1 | while IFS= read -r binary; do otool -L "$binary"; done | grep -E -q '/opt/homebrew|/usr/local'; then echo "app bundle contains an unbundled Homebrew library path" >&2; exit 1; fi; \
+    codesign --force --deep --sign - --timestamp=none "$app_dir"; \
+    codesign --verify --deep --strict "$app_dir"; \
+    ditto -c -k --sequesterRsrc --keepParent "$app_dir" "$archive"; \
+    shasum -a 256 "$archive"; \
+    echo "$archive"
+
 # Print the macOS environment setup command for interactive shells
 macos-env:
     @echo 'source scripts/macos-env.sh'

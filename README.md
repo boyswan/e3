@@ -6,15 +6,31 @@ An experimental Odin terminal multiplexer inspired by i3.
 
 ## Homebrew
 
+Tap and trust the project repository once:
+
 ```sh
 brew tap boyswan/e3
 brew trust boyswan/e3
+```
+
+Install the macOS application:
+
+```sh
+brew install --cask e3
+open -a e3
+```
+
+The current app is ad-hoc signed but not Apple-notarized. After verifying the pinned archive checksum, the trusted cask removes the quarantine attribute so the application can launch normally.
+
+The CLI/TTY formula remains available separately:
+
+```sh
 brew install e3
 e3                 # TTY mode in the current terminal
 e3 --gui           # Detached SDL window
 ```
 
-The SDL window detaches by default, so the launching shell is immediately available and may be closed. Use `e3 --gui --foreground` when you want GUI logs attached to the terminal.
+Use `e3 --gui --foreground` when you want GUI logs attached to the terminal.
 
 ## Requirements
 

@@ -2,9 +2,10 @@ package main
 
 import "core:fmt"
 import "core:os"
+import "core:strings"
 import posix "core:sys/posix"
 
-E3_VERSION :: #config(E3_VERSION, "0.1.3-dev")
+E3_VERSION :: #config(E3_VERSION, "0.1.4-dev")
 
 handle_metadata_args :: proc() -> bool {
 	for arg in os.args {
@@ -27,6 +28,13 @@ detach_requested :: proc() -> bool {
 		}
 	}
 	return false
+}
+
+launched_from_app_bundle :: proc() -> bool {
+	if len(os.args) == 0 {
+		return false
+	}
+	return strings.contains(os.args[0], ".app/Contents/MacOS/")
 }
 
 foreground_requested :: proc() -> bool {

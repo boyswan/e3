@@ -95,7 +95,10 @@ main :: proc() {
 		fmt.eprintln("e3: --detach cannot be used with --tty")
 		os.exit(2)
 	}
-	if renderer_kind == .SDL3 && !foreground {
+	// LaunchServices must retain ownership of the executable inside an app
+	// bundle for Dock activation/reopen behavior, so app launches stay in the
+	// foreground even though ordinary CLI --gui launches detach.
+	if renderer_kind == .SDL3 && !foreground && !launched_from_app_bundle() {
 		parent_should_exit, detached_ok := detach_process()
 		if !detached_ok {
 			os.exit(1)
@@ -106,6 +109,13 @@ main :: proc() {
 	}
 
 	config := cfg.load_config(config_path)
+	// Finder/LaunchServices may assign an implementation-defined working
+	// directory. New app panes should consistently begin in the user's home.
+	if launched_from_app_bundle() {
+		if home := posix.getenv("HOME"); home != nil {
+			_ = posix.chdir(home)
+		}
+	}
 	state: domain.App
 	domain.init_app(&state, config.shell_command)
 	domain.execute_command(&state, domain.command_open_pane())
