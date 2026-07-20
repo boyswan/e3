@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import posix "core:sys/posix"
 
-E3_VERSION :: #config(E3_VERSION, "0.1.1-dev")
+E3_VERSION :: #config(E3_VERSION, "0.1.2-dev")
 
 handle_metadata_args :: proc() -> bool {
 	for arg in os.args {
