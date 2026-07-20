@@ -83,12 +83,32 @@ main :: proc() {
 		os.exit(2)
 	}
 
+	renderer_kind := renderer_kind_from_args()
+	detach := detach_requested()
+	foreground := foreground_requested()
+	if detach && foreground {
+		fmt.eprintln("e3: --detach and --foreground are mutually exclusive")
+		os.exit(2)
+	}
+	if renderer_kind == .TTY && detach {
+		fmt.eprintln("e3: --detach cannot be used with --tty")
+		os.exit(2)
+	}
+	if renderer_kind == .SDL3 && !foreground {
+		parent_should_exit, detached_ok := detach_process()
+		if !detached_ok {
+			os.exit(1)
+		}
+		if parent_should_exit {
+			return
+		}
+	}
+
 	config := cfg.load_config(config_path)
 	state: domain.App
 	domain.init_app(&state, config.shell_command)
 	domain.execute_command(&state, domain.command_open_pane())
 
-	renderer_kind := renderer_kind_from_args()
 	width, height := 120, 40
 	if renderer_kind == .TTY {
 		width, height = tty.size_or_default(80, 24)

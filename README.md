@@ -10,7 +10,10 @@ An experimental Odin terminal multiplexer inspired by i3.
 brew tap boyswan/e3
 brew trust boyswan/e3
 brew install e3
+e3
 ```
+
+The SDL window detaches by default, so the launching shell is immediately available and may be closed. Use `e3 --foreground` when you want logs attached to the terminal.
 
 ## Requirements
 
@@ -36,7 +39,7 @@ Then source the macOS environment helper before building or running:
 
 ```sh
 source scripts/macos-env.sh
-odin run src
+odin run src -- --foreground
 # or, for the TTY renderer:
 odin run src -- --tty
 ```
@@ -56,7 +59,7 @@ macOS uses CoreText for `font.family` lookup, so Fontconfig is not required. Com
 From the project root:
 
 ```sh
-odin run src
+odin run src -- --foreground
 ```
 
 To use the terminal renderer instead of the default SDL3 window:
