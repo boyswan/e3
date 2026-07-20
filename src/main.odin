@@ -10,6 +10,7 @@ import tty "./tty"
 import "base:runtime"
 import "core:fmt"
 import "core:os"
+import posix "core:sys/posix"
 import sdl3 "vendor:sdl3"
 
 // During a macOS live-resize drag the OS runs a modal tracking loop: SDL
@@ -219,7 +220,19 @@ renderer_kind_from_args :: proc() -> renderer.Kind {
 		if arg == "--tty" || arg == "--terminal" {
 			return .TTY
 		}
+		if arg == "--gui" || arg == "--sdl" || arg == "--window" {
+			return .SDL3
+		}
 	}
 
+	// --detach is an explicit request for an independent GUI process.
+	if detach_requested() {
+		return .SDL3
+	}
+	// Interactive CLI launches behave like a terminal multiplexer. Launches
+	// without a controlling stdin (for example a macOS app bundle) use SDL.
+	if posix.isatty(posix.FD(0)) {
+		return .TTY
+	}
 	return .SDL3
 }

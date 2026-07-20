@@ -52,7 +52,7 @@ ghostty-build: ghostty-zig ghostty-fetch
 
 # Run e3 using the Nix/direnv environment on Linux. Optionally pass a config path.
 run config="": ghostty-build
-    if [ -n "{{config}}" ]; then odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --foreground --config "{{config}}"; else odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --foreground; fi
+    if [ -n "{{config}}" ]; then odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --gui --foreground --config "{{config}}"; else odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --gui --foreground; fi
 
 # Run e3 with the TTY renderer. Optionally pass a config path.
 tty config="": ghostty-build
@@ -68,7 +68,7 @@ macos-check:
 
 # Run e3 on macOS without Nix. Optionally pass a config path.
 macos-run config="": ghostty-build
-    source scripts/macos-env.sh && if [ -n "{{config}}" ]; then odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --foreground --config "{{config}}"; else odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --foreground; fi
+    source scripts/macos-env.sh && if [ -n "{{config}}" ]; then odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --gui --foreground --config "{{config}}"; else odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --gui --foreground; fi
 
 # Run e3 with the TTY renderer on macOS without Nix. Optionally pass a config path.
 macos-tty config="": ghostty-build

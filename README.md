@@ -2,7 +2,7 @@
 
 An experimental Odin terminal multiplexer inspired by i3.
 
-`e3` opens terminal panes, arranges them in an i3-style layout tree, and supports numbered workspaces, split layouts, focus movement, pane movement, resize mode, and configurable keybindings. It runs as a native SDL3 window by default, with an optional terminal/TTY renderer.
+`e3` opens terminal panes, arranges them in an i3-style layout tree, and supports numbered workspaces, split layouts, focus movement, pane movement, resize mode, and configurable keybindings. Interactive terminal launches use the TTY renderer by default; `--gui` launches the native SDL3 window.
 
 ## Homebrew
 
@@ -10,10 +10,11 @@ An experimental Odin terminal multiplexer inspired by i3.
 brew tap boyswan/e3
 brew trust boyswan/e3
 brew install e3
-e3
+e3                 # TTY mode in the current terminal
+e3 --gui           # Detached SDL window
 ```
 
-The SDL window detaches by default, so the launching shell is immediately available and may be closed. Use `e3 --foreground` when you want logs attached to the terminal.
+The SDL window detaches by default, so the launching shell is immediately available and may be closed. Use `e3 --gui --foreground` when you want GUI logs attached to the terminal.
 
 ## Requirements
 
@@ -39,9 +40,9 @@ Then source the macOS environment helper before building or running:
 
 ```sh
 source scripts/macos-env.sh
-odin run src -- --foreground
-# or, for the TTY renderer:
-odin run src -- --tty
+odin run src
+# or, for the SDL renderer:
+odin run src -- --gui --foreground
 ```
 
 With `just` installed, the equivalent recipes are:
@@ -56,16 +57,16 @@ macOS uses CoreText for `font.family` lookup, so Fontconfig is not required. Com
 
 ## Run
 
-From the project root:
+From the project root, the interactive terminal defaults to TTY mode:
 
 ```sh
-odin run src -- --foreground
+odin run src
 ```
 
-To use the terminal renderer instead of the default SDL3 window:
+To launch the native SDL window:
 
 ```sh
-odin run src -- --tty
+odin run src -- --gui
 ```
 
 ## Build

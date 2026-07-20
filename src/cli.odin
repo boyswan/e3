@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import posix "core:sys/posix"
 
-E3_VERSION :: #config(E3_VERSION, "0.1.2-dev")
+E3_VERSION :: #config(E3_VERSION, "0.1.3-dev")
 
 handle_metadata_args :: proc() -> bool {
 	for arg in os.args {
@@ -84,9 +84,10 @@ print_usage :: proc() {
 	fmt.println()
 	fmt.println("Options:")
 	fmt.println("  -c, --config PATH  Load an explicit configuration file")
-	fmt.println("      --tty          Use the terminal renderer")
-	fmt.println("      --detach       Explicitly detach the SDL window (the default)")
-	fmt.println("      --foreground   Keep the SDL process attached for logging/debugging")
+	fmt.println("      --tty          Force the terminal renderer")
+	fmt.println("      --gui          Force the SDL window renderer")
+	fmt.println("      --detach       Launch an independent SDL window")
+	fmt.println("      --foreground   Keep an SDL process attached for logging/debugging")
 	fmt.println("  -V, --version      Print version and exit")
 	fmt.println("  -h, --help         Print help and exit")
 }
