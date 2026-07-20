@@ -8,6 +8,7 @@ An experimental Odin terminal multiplexer inspired by i3.
 
 ```sh
 brew tap boyswan/e3
+brew trust boyswan/e3
 brew install e3
 ```
 

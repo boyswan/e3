@@ -33,6 +33,7 @@ Once the tap is pushed, users install with:
 
 ```sh
 brew tap boyswan/e3
+brew trust boyswan/e3
 brew install e3
 ```
 
