@@ -25,7 +25,7 @@ The current app is ad-hoc signed but not Apple-notarized. After verifying the pi
 The CLI/TTY formula remains available separately:
 
 ```sh
-brew install e3
+brew install --formula e3-cli
 e3                 # TTY mode in the current terminal
 e3 --gui           # Detached SDL window
 ```

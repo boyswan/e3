@@ -1,6 +1,6 @@
 # Homebrew packaging
 
-`e3.rb.in` is the CLI/TTY formula template. `e3-app.rb.in` is the macOS application cask template. Release archives are produced by:
+`e3-cli.rb.in` is the CLI/TTY formula template. `e3-app.rb.in` is the macOS application cask template. Release archives are produced by:
 
 ```sh
 just release-app 0.1.0
@@ -17,7 +17,7 @@ scripts/render-homebrew-formula.sh \
   0.1.0 \
   dist/e3-0.1.0-Darwin-arm64.tar.gz \
   dist/e3-0.1.0-Darwin-x86_64.tar.gz \
-  ../homebrew-e3/Formula/e3.rb
+  ../homebrew-e3/Formula/e3-cli.rb
 ```
 
 4. Render the cask into the tap repository:
@@ -33,8 +33,8 @@ scripts/render-homebrew-cask.sh \
 5. Validate both:
 
 ```sh
-brew style Formula/e3.rb Casks/e3.rb
-brew audit --strict --new boyswan/e3/e3
+brew style Formula/e3-cli.rb Casks/e3.rb
+brew audit --strict --new boyswan/e3/e3-cli
 brew install --cask Casks/e3.rb
 brew test e3
 ```
@@ -45,7 +45,7 @@ Once the tap is pushed, users install with:
 brew tap boyswan/e3
 brew trust boyswan/e3
 brew install --cask e3                  # macOS application
-brew install e3                         # optional CLI/TTY formula
+brew install --formula e3-cli           # optional CLI/TTY formula
 ```
 
 The release executable statically links libghostty-vt. SDL3 and SDL3_ttf remain Homebrew runtime dependencies.

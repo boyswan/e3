@@ -9,9 +9,9 @@ fi
 version="$1"
 arm64_archive="$2"
 x86_64_archive="$3"
-output="${4:-dist/e3.rb}"
+output="${4:-dist/e3-cli.rb}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
-template="$root/packaging/homebrew/e3.rb.in"
+template="$root/packaging/homebrew/e3-cli.rb.in"
 
 for archive in "$arm64_archive" "$x86_64_archive"; do
   if [[ ! -f "$archive" ]]; then
