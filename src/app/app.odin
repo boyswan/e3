@@ -29,6 +29,7 @@ make_pane :: proc(app: ^App) -> ^Pane {
 	pane := new(Pane)
 	pane.id = app.next_pane_id
 	pane.terminal.backend = .Ghostty
+	pane.terminal.shell_command = app.shell_command
 	pane.split_kind = .Split_Horizontal
 	pane.split_active = false
 	app.next_pane_id += 1
@@ -80,10 +81,11 @@ ensure_workspace_pane :: proc(app: ^App, workspace: ^Workspace) -> bool {
 	return true
 }
 
-init_app :: proc(app: ^App) {
+init_app :: proc(app: ^App, shell_command := "") {
 	app.workspaces = make([dynamic]Workspace)
 	app.active_workspace_index = 0
 	app.next_pane_id = 1
+	app.shell_command = shell_command
 
 	append(&app.workspaces, make_workspace(1))
 }

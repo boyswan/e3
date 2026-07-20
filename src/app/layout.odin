@@ -310,9 +310,65 @@ apply_split_context :: proc(app: ^App, kind: Node_Kind) -> bool {
 	return focus_node(workspace, focused)
 }
 
+fullscreen_pane :: proc(node: ^Node) -> ^Pane {
+	if node == nil {
+		return nil
+	}
+	if node.kind == .Pane {
+		if node.pane != nil && node.pane.fullscreen {
+			return node.pane
+		}
+		return nil
+	}
+	for child in node.children {
+		if pane := fullscreen_pane(child); pane != nil {
+			return pane
+		}
+	}
+	return nil
+}
+
+clear_fullscreen :: proc(node: ^Node) {
+	if node == nil {
+		return
+	}
+	if node.kind == .Pane {
+		if node.pane != nil {
+			node.pane.fullscreen = false
+		}
+		return
+	}
+	for child in node.children {
+		clear_fullscreen(child)
+	}
+}
+
+toggle_focused_pane_fullscreen :: proc(app: ^App) -> bool {
+	workspace := active_workspace(app)
+	if workspace == nil || workspace.root == nil {
+		return false
+	}
+
+	focused := find_focused_node(workspace.root, workspace.focused_pane_id)
+	if focused == nil || focused.kind != .Pane || focused.pane == nil {
+		return false
+	}
+
+	was_fullscreen := focused.pane.fullscreen
+	clear_fullscreen(workspace.root)
+	focused.pane.fullscreen = !was_fullscreen
+	return focus_node(workspace, focused)
+}
+
 open_pane :: proc(app: ^App) -> bool {
 	workspace := active_workspace(app)
 	if workspace == nil {
+		return false
+	}
+
+	// A leaf fullscreen container owns focus in i3. Avoid creating and focusing
+	// a hidden pane behind it; leave fullscreen first to change the tree.
+	if fullscreen_pane(workspace.root) != nil {
 		return false
 	}
 
@@ -822,6 +878,9 @@ move_focused_pane_to_workspace :: proc(app: ^App, workspace_id: int) -> bool {
 	if target == nil {
 		return false
 	}
+	// The moved pane becomes the destination focus. Clear an existing leaf
+	// fullscreen state there so the destination focus cannot be hidden.
+	clear_fullscreen(target.root)
 
 	// ensure_workspace may reallocate/reindex app.workspaces; keep the
 	// source workspace active and re-fetch its pointer.
@@ -1203,6 +1262,10 @@ focus_direction :: proc(app: ^App, direction: Direction) -> bool {
 	workspace := active_workspace(app)
 	if workspace == nil || workspace.root == nil {
 		return false
+	}
+
+	if pane := fullscreen_pane(workspace.root); pane != nil {
+		return focus_pane(workspace, pane)
 	}
 
 	focused := find_focused_node(workspace.root, workspace.focused_pane_id)

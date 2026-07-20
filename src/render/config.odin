@@ -23,6 +23,23 @@ Bar_Colors :: struct {
 	binding_mode: Workspace_Button_Colors,
 }
 
+Client_Color :: struct {
+	border:       RGB_Color,
+	background:   RGB_Color,
+	text:         RGB_Color,
+	indicator:    RGB_Color,
+	child_border: RGB_Color,
+}
+
+Client_Colors :: struct {
+	focused:          Client_Color,
+	focused_inactive: Client_Color,
+	unfocused:        Client_Color,
+	urgent:           Client_Color,
+	focused_tab_title: Client_Color,
+	background:       RGB_Color,
+}
+
 Renderer_Config :: struct {
 	font_path:   string,
 	font_family: string,
@@ -40,22 +57,28 @@ Renderer_Config :: struct {
 	foreground_b:   u8,
 	palette:        [16]RGB_Color,
 	bar:            Bar_Colors,
+	client:         Client_Colors,
 }
 
 renderer_default_config :: proc() -> Renderer_Config {
+	default_font_family := "monospace"
+	when ODIN_OS == .Darwin {
+		default_font_family = "Menlo"
+	}
+
 	config := Renderer_Config {
-		font_family = "monospace",
-		font_size = 18,
-		native_pane_padding_px = 0,
+		font_family = default_font_family,
+		font_size = 12,
+		native_pane_padding_px = 10,
 		native_pane_border_px = 1,
 		background_set = true,
-		background_r = 10,
-		background_g = 10,
-		background_b = 12,
+		background_r = 0x23,
+		background_g = 0x23,
+		background_b = 0x26,
 		foreground_set = true,
-		foreground_r = 220,
-		foreground_g = 220,
-		foreground_b = 220,
+		foreground_r = 0xe1,
+		foreground_g = 0xe1,
+		foreground_b = 0xe1,
 	}
 
 	config.palette[0] = RGB_Color{0x18, 0x1a, 0x1f}
@@ -84,6 +107,13 @@ renderer_default_config :: proc() -> Renderer_Config {
 	config.bar.urgent_workspace = Workspace_Button_Colors{border = RGB_Color{0x2f, 0x34, 0x3a}, background = RGB_Color{0x90, 0x00, 0x00}, text = RGB_Color{0xff, 0xff, 0xff}}
 	config.bar.binding_mode = Workspace_Button_Colors{border = RGB_Color{0x2f, 0x34, 0x3a}, background = RGB_Color{0x90, 0x00, 0x00}, text = RGB_Color{0xff, 0xff, 0xff}}
 
+	config.client.focused = Client_Color{border = RGB_Color{0x4c, 0x78, 0x99}, background = RGB_Color{0x28, 0x55, 0x77}, text = RGB_Color{0xff, 0xff, 0xff}, indicator = RGB_Color{0x2e, 0x9e, 0xf4}, child_border = RGB_Color{0x28, 0x55, 0x77}}
+	config.client.focused_inactive = Client_Color{border = RGB_Color{0x33, 0x33, 0x33}, background = RGB_Color{0x5f, 0x67, 0x6a}, text = RGB_Color{0xff, 0xff, 0xff}, indicator = RGB_Color{0x48, 0x4e, 0x50}, child_border = RGB_Color{0x5f, 0x67, 0x6a}}
+	config.client.unfocused = Client_Color{border = RGB_Color{0x33, 0x33, 0x33}, background = RGB_Color{0x22, 0x22, 0x22}, text = RGB_Color{0x88, 0x88, 0x88}, indicator = RGB_Color{0x29, 0x2d, 0x2e}, child_border = RGB_Color{0x22, 0x22, 0x22}}
+	config.client.urgent = Client_Color{border = RGB_Color{0x2f, 0x34, 0x3a}, background = RGB_Color{0x90, 0x00, 0x00}, text = RGB_Color{0xff, 0xff, 0xff}, indicator = RGB_Color{0x90, 0x00, 0x00}, child_border = RGB_Color{0x90, 0x00, 0x00}}
+	config.client.focused_tab_title = config.client.focused_inactive
+	config.client.background = RGB_Color{0xff, 0xff, 0xff}
+
 	return config
 }
 
@@ -91,12 +121,12 @@ renderer_config_background :: proc(config: Renderer_Config) -> (u8, u8, u8) {
 	if config.background_set {
 		return config.background_r, config.background_g, config.background_b
 	}
-	return 10, 10, 12
+	return 0x23, 0x23, 0x26
 }
 
 renderer_config_foreground :: proc(config: Renderer_Config) -> (u8, u8, u8) {
 	if config.foreground_set {
 		return config.foreground_r, config.foreground_g, config.foreground_b
 	}
-	return 220, 220, 220
+	return 0xe1, 0xe1, 0xe1
 }

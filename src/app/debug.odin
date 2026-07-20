@@ -2,9 +2,8 @@ package app
 
 import "core:fmt"
 import "core:os"
+import filepath "core:path/filepath"
 import "core:strings"
-
-DEBUG_TREE_PATH :: "/tmp/e3-tree.log"
 
 dump_tree :: proc(app: ^App) -> bool {
 	builder := strings.builder_make()
@@ -35,7 +34,15 @@ dump_tree :: proc(app: ^App) -> bool {
 		fmt.sbprintfln(&builder, "")
 	}
 
-	return os.write_entire_file(DEBUG_TREE_PATH, strings.to_string(builder)) == nil
+	temp_dir, temp_err := os.temp_dir(context.temp_allocator)
+	if temp_err != nil {
+		return false
+	}
+	path, path_err := filepath.join({temp_dir, "e3-tree.log"}, context.temp_allocator)
+	if path_err != nil {
+		return false
+	}
+	return os.write_entire_file(path, strings.to_string(builder)) == nil
 }
 
 dump_node :: proc(builder: ^strings.Builder, node: ^Node, depth: int, focused_pane_id: int) {
@@ -65,7 +72,7 @@ dump_node :: proc(builder: ^strings.Builder, node: ^Node, depth: int, focused_pa
 
 		fmt.sbprintf(
 			builder,
-			" %s pane_id=%d bounds=(%d,%d %dx%d) split_active=%v split_kind=%v title=%s",
+			" %s pane_id=%d bounds=(%d,%d %dx%d) split_active=%v split_kind=%v fullscreen=%v title=%s",
 			focused_marker,
 			pane.id,
 			pane.bounds.x,
@@ -74,6 +81,7 @@ dump_node :: proc(builder: ^strings.Builder, node: ^Node, depth: int, focused_pa
 			pane.bounds.height,
 			pane.split_active,
 			pane.split_kind,
+			pane.fullscreen,
 			pane_title(pane),
 		)
 	}

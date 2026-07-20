@@ -45,6 +45,7 @@ Screen_Buffer :: struct {
 	foreground_b: u8,
 	palette:      [16]RGB_Color,
 	bar:          Bar_Colors,
+	client:       Client_Colors,
 }
 
 make_screen_buffer :: proc(width: int, height: int) -> Screen_Buffer {
@@ -52,16 +53,17 @@ make_screen_buffer :: proc(width: int, height: int) -> Screen_Buffer {
 		width = width,
 		height = height,
 		cells = make([]Cell, width * height),
-		background_r = 10,
-		background_g = 10,
-		background_b = 12,
-		foreground_r = 220,
-		foreground_g = 220,
-		foreground_b = 220,
+		background_r = 0x23,
+		background_g = 0x23,
+		background_b = 0x26,
+		foreground_r = 0xe1,
+		foreground_g = 0xe1,
+		foreground_b = 0xe1,
 	}
 	defaults := renderer_default_config()
 	buffer.palette = defaults.palette
 	buffer.bar = defaults.bar
+	buffer.client = defaults.client
 
 	screen_clear(&buffer)
 	return buffer
@@ -94,6 +96,10 @@ screen_set_palette :: proc(buffer: ^Screen_Buffer, palette: [16]RGB_Color) {
 
 screen_set_bar_colors :: proc(buffer: ^Screen_Buffer, bar: Bar_Colors) {
 	buffer.bar = bar
+}
+
+screen_set_client_colors :: proc(buffer: ^Screen_Buffer, client: Client_Colors) {
+	buffer.client = client
 }
 
 screen_clear :: proc(buffer: ^Screen_Buffer) {

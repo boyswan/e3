@@ -6,5 +6,9 @@ plan.md
 i3.md
 i3
 src.bin
+src_tty.bin
 e3
 vendor/ghostty-vt
+
+dist/
+build/

@@ -2,7 +2,9 @@
 
 font:
   # Resolved by native font lookup on macOS and Fontconfig elsewhere.
-  family: "MesloLGL Nerd Font"
+  # Use a family installed on the target machine.
+  family: "monospace"
+  # family: "MesloLGL Nerd Font"
   # Optional explicit font file. Leave empty to use `family`.
   path: ""
   size: 12
@@ -11,12 +13,26 @@ window:
   background: "#232326"
   foreground: "#E1E1E1"
 
+shell:
+  # Defaults to $SHELL, then /bin/sh. The command may be an absolute path or
+  # an executable found through PATH.
+  # command: "/bin/zsh"
+
 pane:
   # SDL-only visual padding. Reserved for native pane layout work;
   # terminal cells are not offset by it yet.
   native_padding_px: 10
   # SDL-only border thickness, measured in pixels.
   native_border_px: 1
+
+# i3 client color order: border, background, text, indicator, child_border.
+client:
+  focused: "#4c7899 #285577 #ffffff #2e9ef4 #285577"
+  focused_inactive: "#333333 #5f676a #ffffff #484e50 #5f676a"
+  unfocused: "#333333 #222222 #888888 #292d2e #222222"
+  urgent: "#2f343a #900000 #ffffff #900000 #900000"
+  focused_tab_title: "#333333 #5f676a #ffffff #484e50 #5f676a"
+  background: "#ffffff"
 
 bar:
   # i3 default bar/workspace colors.
@@ -48,9 +64,9 @@ palette:
   bright_white: "0xabb2bf"
 
 input:
-  # alt/option/opt or super/gui/cmd/command/meta
-  mod: "super"
-  # mod: "alt"
+  # Built-in modifier: Command on macOS, Alt elsewhere.
+  # Override with alt/option/opt or super/gui/cmd/command/meta.
+  # mod: "super"
 
   # Key names are matched with the configured mod key.
   # Use "shift+<key>" for shifted bindings.

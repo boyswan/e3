@@ -50,13 +50,13 @@ ghostty-build: ghostty-zig ghostty-fetch
     cd .deps/ghostty; \
     "$ghostty_zig" build -Demit-lib-vt=true -Demit-xcframework=false -Doptimize=ReleaseFast --prefix "$prefix"
 
-# Run e3 using the Nix/direnv environment on Linux
-run: ghostty-build
-    odin run src -extra-linker-flags:"{{ghostty_ld_flags}}"
+# Run e3 using the Nix/direnv environment on Linux. Optionally pass a config path.
+run config="": ghostty-build
+    if [ -n "{{config}}" ]; then odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --config "{{config}}"; else odin run src -extra-linker-flags:"{{ghostty_ld_flags}}"; fi
 
-# Run e3 with the TTY renderer
-tty: ghostty-build
-    odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --tty
+# Run e3 with the TTY renderer. Optionally pass a config path.
+tty config="": ghostty-build
+    if [ -n "{{config}}" ]; then odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --tty --config "{{config}}"; else odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --tty; fi
 
 # Build e3 using the Nix/direnv environment on Linux
 build: ghostty-build
@@ -66,17 +66,40 @@ build: ghostty-build
 macos-check:
     source scripts/macos-env.sh
 
-# Run e3 on macOS without Nix
-macos-run: ghostty-build
-    source scripts/macos-env.sh && odin run src -extra-linker-flags:"{{ghostty_ld_flags}}"
+# Run e3 on macOS without Nix. Optionally pass a config path.
+macos-run config="": ghostty-build
+    source scripts/macos-env.sh && if [ -n "{{config}}" ]; then odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --config "{{config}}"; else odin run src -extra-linker-flags:"{{ghostty_ld_flags}}"; fi
 
-# Run e3 with the TTY renderer on macOS without Nix
-macos-tty: ghostty-build
-    source scripts/macos-env.sh && odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --tty
+# Run e3 with the TTY renderer on macOS without Nix. Optionally pass a config path.
+macos-tty config="": ghostty-build
+    source scripts/macos-env.sh && if [ -n "{{config}}" ]; then odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --tty --config "{{config}}"; else odin run src -extra-linker-flags:"{{ghostty_ld_flags}}" -- --tty; fi
 
 # Build e3 on macOS without Nix
 macos-build: ghostty-build
     source scripts/macos-env.sh && odin build src -out:e3 -extra-linker-flags:"{{ghostty_ld_flags}}"
+
+# Build a relocatable release archive. libghostty-vt is linked statically;
+# SDL3 and SDL3_ttf remain Homebrew runtime dependencies.
+release version="0.1.0-dev": ghostty-build
+    set -eu; \
+    version="{{version}}"; \
+    platform="{{ghostty_platform}}"; \
+    static_dir="$(pwd)/build/ghostty-static/$platform"; \
+    package_dir="$(pwd)/build/package/e3-$version-$platform"; \
+    archive="$(pwd)/dist/e3-$version-$platform.tar.gz"; \
+    rm -rf "$static_dir" "$package_dir"; \
+    mkdir -p "$static_dir" "$package_dir" "$(pwd)/dist"; \
+    cp "{{ghostty_prefix}}/lib/libghostty-vt.a" "$static_dir/"; \
+    if [ "$(uname -s)" = Darwin ]; then source scripts/macos-env.sh; fi; \
+    odin build src -out:"$package_dir/e3" -o:speed -source-code-locations:none -define:E3_VERSION="$version" -extra-linker-flags:"-L$static_dir"; \
+    if [ "$(uname -s)" = Darwin ]; then strip -x "$package_dir/e3"; else strip --strip-unneeded "$package_dir/e3"; fi; \
+    cp config.example.yaml README.md "$package_dir/"; \
+    if [ -f LICENSE ]; then cp LICENSE "$package_dir/"; fi; \
+    if [ "$(uname -s)" = Darwin ] && otool -L "$package_dir/e3" | grep -q libghostty-vt; then echo "release binary still links dynamic libghostty-vt" >&2; exit 1; fi; \
+    if LC_ALL=C strings "$package_dir/e3" | grep -E -q "$(pwd)|/Users/|/home/|/opt/homebrew/Cellar|/usr/local/Cellar"; then echo "release binary contains a local build path" >&2; exit 1; fi; \
+    tar -czf "$archive" -C "$(dirname "$package_dir")" "$(basename "$package_dir")"; \
+    shasum -a 256 "$archive"; \
+    echo "$archive"
 
 # Print the macOS environment setup command for interactive shells
 macos-env:

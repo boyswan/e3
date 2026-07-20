@@ -88,6 +88,7 @@ apply_surface_theme :: proc(renderer: ^Renderer) {
 	render.screen_set_foreground(&renderer.surface, fg_r, fg_g, fg_b)
 	render.screen_set_palette(&renderer.surface, renderer.config.palette)
 	render.screen_set_bar_colors(&renderer.surface, renderer.config.bar)
+	render.screen_set_client_colors(&renderer.surface, renderer.config.client)
 }
 
 present :: proc(renderer: ^Renderer, state: ^domain.App = nil, mode := input.Input_Mode.Normal) {

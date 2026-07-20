@@ -8,6 +8,7 @@ import renderer "./renderer"
 import native "./sdl"
 import tty "./tty"
 import "base:runtime"
+import "core:fmt"
 import "core:os"
 import sdl3 "vendor:sdl3"
 
@@ -68,8 +69,23 @@ render_frame :: proc(r: ^renderer.Renderer, state: ^domain.App, config: ^cfg.Con
 }
 
 main :: proc() {
+	if handle_metadata_args() {
+		return
+	}
+
+	config_path, config_path_ok := config_path_from_args()
+	if !config_path_ok {
+		fmt.eprintln("e3: --config/-c requires a file path")
+		os.exit(2)
+	}
+	if config_path != "" && !os.exists(config_path) {
+		fmt.eprintln("e3: config file does not exist:", config_path)
+		os.exit(2)
+	}
+
+	config := cfg.load_config(config_path)
 	state: domain.App
-	domain.init_app(&state)
+	domain.init_app(&state, config.shell_command)
 	domain.execute_command(&state, domain.command_open_pane())
 
 	renderer_kind := renderer_kind_from_args()
@@ -77,7 +93,6 @@ main :: proc() {
 	if renderer_kind == .TTY {
 		width, height = tty.size_or_default(80, 24)
 	}
-	config := cfg.load_config()
 	r := renderer.make(renderer_kind, width, height, config.renderer)
 	defer renderer.destroy(&r)
 
@@ -160,6 +175,23 @@ max_int :: proc(a: int, b: int) -> int {
 		return a
 	}
 	return b
+}
+
+config_path_from_args :: proc() -> (string, bool) {
+	for index := 0; index < len(os.args); index += 1 {
+		arg := os.args[index]
+		if arg == "--config" || arg == "-c" {
+			if index + 1 >= len(os.args) {
+				return "", false
+			}
+			return os.args[index + 1], true
+		}
+		if len(arg) >= len("--config=") && arg[:len("--config=")] == "--config=" {
+			path := arg[len("--config="):]
+			return path, len(path) > 0
+		}
+	}
+	return "", true
 }
 
 renderer_kind_from_args :: proc() -> renderer.Kind {

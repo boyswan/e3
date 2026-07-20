@@ -53,9 +53,17 @@ terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) ->
 		col = u16(width),
 	}
 
+	configured_shell: cstring
+	if len(term.shell_command) > 0 {
+		configured_shell = strings.clone_to_cstring(term.shell_command)
+	}
+
 	master: c.int
 	pid := forkpty(&master, nil, nil, &winsize)
 	if pid < 0 {
+		if configured_shell != nil {
+			delete(configured_shell)
+		}
 		if !term.spawn_error_logged {
 			fmt.eprintln("e3: failed to spawn shell with forkpty")
 			term.spawn_error_logged = true
@@ -67,16 +75,23 @@ terminal_spawn_shell :: proc(term: ^Terminal_Handle, width: int, height: int) ->
 		_ = posix.setenv("TERM", "xterm-256color", true)
 		_ = posix.setenv("COLORTERM", "truecolor", true)
 
-		shell := posix.getenv("SHELL")
+		shell := configured_shell
+		if shell == nil {
+			shell = posix.getenv("SHELL")
+		}
 		if shell == nil {
 			shell = "/bin/sh"
 		}
 
 		argv := [?]cstring{shell, nil}
 		posix.execvp(argv[0], raw_data(argv[:]))
+		fmt.eprintln("e3: failed to execute shell:", string(shell))
 		posix._exit(127)
 	}
 
+	if configured_shell != nil {
+		delete(configured_shell)
+	}
 	term.active = true
 	term.spawn_error_logged = false
 	term.pty_fd = int(master)

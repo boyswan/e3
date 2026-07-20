@@ -303,6 +303,11 @@ apply_selection_style :: proc(state: ^State, surface: ^render.Screen_Buffer, cel
 }
 
 native_cell_offset :: proc(state: ^State, config: render.Renderer_Config, app: ^domain.App, x: int, y: int) -> (int, int) {
+	if app != nil {
+		if workspace := domain.active_workspace(app); workspace != nil && domain.fullscreen_pane(workspace.root) != nil {
+			return 0, 0
+		}
+	}
 	if app != nil && config.native_pane_padding_px > 0 {
 		_ = state
 		_, ok := native_cell_pane_bounds(app, x, y)
@@ -751,13 +756,17 @@ cell_color :: proc(surface: ^render.Screen_Buffer, cell: render.Cell) -> (int, i
 		}
 		return int(surface.foreground_r), int(surface.foreground_g), int(surface.foreground_b)
 	case .Inactive:
-		return int(surface.palette[8].r), int(surface.palette[8].g), int(surface.palette[8].b)
+		color := surface.client.unfocused.child_border
+		return int(color.r), int(color.g), int(color.b)
 	case .Focused_Inactive:
-		return int(surface.palette[7].r), int(surface.palette[7].g), int(surface.palette[7].b)
+		color := surface.client.focused_inactive.child_border
+		return int(color.r), int(color.g), int(color.b)
 	case .Focused:
-		return int(surface.palette[4].r), int(surface.palette[4].g), int(surface.palette[4].b)
+		color := surface.client.focused.child_border
+		return int(color.r), int(color.g), int(color.b)
 	case .Split_Hint:
-		return int(surface.palette[13].r), int(surface.palette[13].g), int(surface.palette[13].b)
+		color := surface.client.focused.indicator
+		return int(color.r), int(color.g), int(color.b)
 	}
 
 	return int(surface.foreground_r), int(surface.foreground_g), int(surface.foreground_b)
@@ -789,9 +798,74 @@ draw_native_chrome :: proc(state: ^State, surface: ^render.Screen_Buffer, app: ^
 	if workspace == nil || workspace.root == nil {
 		return
 	}
+	if domain.fullscreen_pane(workspace.root) != nil {
+		return
+	}
 
 	draw_native_pane_borders(state, surface, workspace.root, workspace.focused_pane_id, mode, output_pixel_width, output_pixel_height)
+	draw_native_tab_borders(state, surface, workspace.root, output_pixel_width)
 	draw_native_workspace_bar_borders(state, surface, app, output_pixel_height)
+}
+
+draw_native_tab_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, node: ^domain.Node, output_pixel_width := 0) {
+	if node == nil {
+		return
+	}
+
+	switch node.kind {
+	case .Pane:
+		return
+	case .Split_Horizontal, .Split_Vertical:
+		for child in node.children {
+			draw_native_tab_borders(state, surface, child, output_pixel_width)
+		}
+	case .Stacked, .Tabbed:
+		focused := domain.focused_child(node)
+		for child in node.children {
+			deco := child.deco_bounds
+			if deco.width <= 0 || deco.height <= 0 {
+				continue
+			}
+
+			colors := surface.client.unfocused
+			if child == focused {
+				colors = surface.client.focused
+			}
+
+			x := deco.x * state.cell_width
+			y := deco.y * state.cell_height
+			width := deco.width * state.cell_width
+			height := deco.height * state.cell_height
+			if output_pixel_width > 0 && deco.x + deco.width == surface.width {
+				width = max_int(output_pixel_width - x, 0)
+			}
+			border := colors.border
+			draw_native_title_border(state, x, y, width, height, border.r, border.g, border.b)
+		}
+
+		if focused != nil {
+			draw_native_tab_borders(state, surface, focused, output_pixel_width)
+		}
+	}
+}
+
+draw_native_title_border :: proc(state: ^State, x: int, y: int, width: int, height: int, r: u8, g: u8, b: u8) {
+	if width <= 0 || height <= 0 {
+		return
+	}
+
+	// Match i3's x_draw_title_border: one pixel on every decoration edge.
+	sdl3.SetRenderDrawColor(state.renderer, r, g, b, 255)
+	left := f32(x)
+	top := f32(y)
+	right := f32(x + width - 1)
+	bottom := f32(y + height - 1)
+	w := f32(width)
+	h := f32(height)
+	sdl3.RenderFillRect(state.renderer, &sdl3.FRect{x = left, y = top, w = 1, h = h})
+	sdl3.RenderFillRect(state.renderer, &sdl3.FRect{x = right, y = top, w = 1, h = h})
+	sdl3.RenderFillRect(state.renderer, &sdl3.FRect{x = left, y = top, w = w, h = 1})
+	sdl3.RenderFillRect(state.renderer, &sdl3.FRect{x = left, y = bottom, w = w, h = 1})
 }
 
 draw_native_pane_borders :: proc(state: ^State, surface: ^render.Screen_Buffer, node: ^domain.Node, focused_pane_id: int, mode: input.Input_Mode, output_pixel_width := 0, output_pixel_height := 0) {
@@ -881,6 +955,11 @@ native_cell_pane_bounds :: proc(app: ^domain.App, x: int, y: int) -> (domain.Rec
 	workspace := domain.active_workspace(app)
 	if workspace == nil || workspace.root == nil {
 		return domain.Rect{}, false
+	}
+	if pane := domain.fullscreen_pane(workspace.root); pane != nil {
+		bounds := pane.bounds
+		inside := x >= bounds.x && x < bounds.x + bounds.width && y >= bounds.y && y < bounds.y + bounds.height
+		return bounds, inside
 	}
 	return native_cell_pane_bounds_node(workspace.root, x, y)
 }

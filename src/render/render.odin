@@ -13,6 +13,15 @@ render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Re
 
 	screen_clear(buffer)
 
+	if pane := domain.fullscreen_pane(workspace.root); pane != nil {
+		// i3 fullscreen suppresses container decorations and the workspace bar.
+		// Give the pane the complete renderer surface, including the bar row.
+		pane.bounds = bounds
+		domain.terminal_spawn_shell(&pane.terminal, max_int(bounds.width, 1), max_int(bounds.height, 1))
+		render_terminal_contents(buffer, pane, true, 0)
+		return
+	}
+
 	content_bounds := domain.Rect {
 		x = bounds.x,
 		y = bounds.y,
@@ -175,8 +184,8 @@ render_stack_bar :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
 	}
 
 	focused := domain.focused_child(node)
-	focused_colors := Workspace_Button_Colors{border = RGB_Color{0x4c, 0x78, 0x99}, background = RGB_Color{0x28, 0x55, 0x77}, text = RGB_Color{0xff, 0xff, 0xff}}
-	inactive_colors := Workspace_Button_Colors{border = RGB_Color{0x33, 0x33, 0x33}, background = RGB_Color{0x22, 0x22, 0x22}, text = RGB_Color{0x88, 0x88, 0x88}}
+	focused_colors := client_button_colors(buffer.client.focused)
+	inactive_colors := client_button_colors(buffer.client.unfocused)
 
 	for child in node.children {
 		deco := child.deco_bounds
@@ -199,8 +208,8 @@ render_tab_bar :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
 	}
 
 	focused := domain.focused_child(node)
-	focused_colors := Workspace_Button_Colors{border = RGB_Color{0x4c, 0x78, 0x99}, background = RGB_Color{0x28, 0x55, 0x77}, text = RGB_Color{0xff, 0xff, 0xff}}
-	inactive_colors := Workspace_Button_Colors{border = RGB_Color{0x33, 0x33, 0x33}, background = RGB_Color{0x22, 0x22, 0x22}, text = RGB_Color{0x88, 0x88, 0x88}}
+	focused_colors := client_button_colors(buffer.client.focused)
+	inactive_colors := client_button_colors(buffer.client.unfocused)
 
 	for index in 0 ..< child_count {
 		child := node.children[index]
@@ -217,6 +226,10 @@ render_tab_bar :: proc(buffer: ^Screen_Buffer, node: ^domain.Node) {
 	}
 }
 
+client_button_colors :: proc(colors: Client_Color) -> Workspace_Button_Colors {
+	return Workspace_Button_Colors{border = colors.border, background = colors.background, text = colors.text}
+}
+
 render_tab_button :: proc(buffer: ^Screen_Buffer, child: ^domain.Node, x: int, y: int, width: int, colors: Workspace_Button_Colors) {
 	if width <= 0 {
 		return
@@ -226,12 +239,13 @@ render_tab_button :: proc(buffer: ^Screen_Buffer, child: ^domain.Node, x: int, y
 		screen_put_rgb(buffer, x + offset, y, " ", colors.text, colors.background)
 	}
 
-	title_width := node_title_width(child)
-	if title_width <= 0 {
+	if node_title_width(child) <= 0 {
 		return
 	}
-	start_x := x + max_int((width - title_width) / 2, 0)
-	render_node_title(buffer, child, start_x, y, colors.text, colors.background, x + width)
+	// i3's default title_align is left. Its two-pixel title padding is smaller
+	// than one terminal cell, so the cell renderer starts at the left edge and
+	// the native 1px decoration border provides the visual inset.
+	render_node_title(buffer, child, x, y, colors.text, colors.background, x + width)
 }
 
 node_title_width :: proc(node: ^domain.Node) -> int {

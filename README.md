@@ -41,7 +41,7 @@ just macos-tty
 just macos-build
 ```
 
-macOS uses CoreText for `font.family` lookup, so Fontconfig is not required. If Option/Alt keybindings conflict with your keyboard layout, set `input.mod: "super"` in `config.yaml` to use Command instead.
+macOS uses CoreText for `font.family` lookup, so Fontconfig is not required. Command is the built-in modifier on macOS; Linux defaults to Alt. Both can be overridden with `input.mod` in the user configuration.
 
 ## Run
 
@@ -64,36 +64,67 @@ odin build src -out:e3
 ./e3
 ```
 
+For a relocatable release archive with libghostty-vt linked statically:
+
+```sh
+just release 0.1.0
+```
+
+The archive is written to `dist/`. SDL3 and SDL3_ttf remain runtime dependencies. Homebrew formula packaging files are documented under `packaging/homebrew/`.
+
 ## Configuration
 
-Configuration is loaded from the first matching path:
+A configuration file is optional; e3 has portable built-in defaults. Configuration is loaded from the first existing path:
 
-1. `./config.yaml`
-2. `./e3.yaml`
-3. `$XDG_CONFIG_HOME/e3/config.yaml`
-4. `~/.config/e3/config.yaml`
+1. `$E3_CONFIG` (explicit override)
+2. `$XDG_CONFIG_HOME/e3/config.yaml`
+3. `~/.config/e3/config.yaml`
+4. `~/Library/Application Support/e3/config.yaml` (macOS)
 
-See `config.yaml` for the current options, including font settings, colors, pane styling, modifier key, and keybindings.
+Pass an explicit file with `--config`, `--config=...`, or `-c`; this takes precedence over every environment/user path:
+
+```sh
+./e3 --config /path/to/config.yaml
+# Development recipe shorthand:
+just macos-run /path/to/config.yaml
+```
+
+`config.example.yaml` documents all current options. To customize e3:
+
+```sh
+mkdir -p ~/.config/e3
+cp config.example.yaml ~/.config/e3/config.yaml
+```
+
+New panes execute `$SHELL` by default, falling back to `/bin/sh`. Override it with an executable path or name:
+
+```yaml
+shell:
+  command: "/bin/zsh"
+```
 
 ## Default keybindings
 
-The default modifier is `Alt`.
+`Mod` is Command on macOS and Alt elsewhere.
 
 | Binding | Action |
 | --- | --- |
-| `Alt+q` | Quit |
-| `Alt+d` | Split/open to the right |
-| `Alt+Shift+d` | Split/open down |
-| `Alt+Enter` | Open pane in the active split context |
-| `Alt+w` | Close focused pane |
-| `Alt+h/j/k/l` | Focus left/down/up/right |
-| `Alt+Shift+h/j/k/l` | Move pane left/down/up/right |
-| `Alt+r` | Enter resize mode |
-| `Alt+1..9` | Switch workspace |
-| `Alt+t` | Dump layout tree to `/tmp/e3-tree.log` |
+| `Mod+q` | Quit e3 |
+| `Mod+d` | Set horizontal split context |
+| `Mod+Shift+d` | Set vertical split context |
+| `Mod+Enter` | Open pane in the active split context |
+| `Mod+w` | Close focused pane |
+| `Mod+h/j/k/l` | Focus left/down/up/right |
+| `Mod+Shift+h/j/k/l` | Move pane left/down/up/right |
+| `Mod+Shift+s/w/e` | Stacking/tabbed/toggle split layout |
+| `Mod+Shift+f` | Toggle focused-pane fullscreen |
+| `Mod+r` | Enter resize mode |
+| `Mod+1..9` | Switch workspace |
+| `Mod+Shift+1..9` | Move focused pane to workspace |
+| `Mod+t` | Dump layout tree to `$TMPDIR/e3-tree.log` |
 
-In resize mode, use `h/l` to shrink/grow width, `k/j` to shrink/grow height, and `Enter`, `Esc`, or `Alt+r` to return to normal mode.
+In resize mode, use `h/l` to shrink/grow width, `k/j` to shrink/grow height, and `Enter`, `Esc`, or `Mod+r` to return to normal mode.
 
-## Notes
+## License
 
-This project is a work in progress. See `plan.md` and `i3.md` for implementation notes and i3 behavior research.
+e3 is available under the [MIT License](LICENSE).

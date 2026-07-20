@@ -7,18 +7,24 @@ import input "../input"
 import render "../render"
 
 Config :: struct {
-	renderer: render.Renderer_Config,
-	mod_key:  input.Mod_Key,
-	bindings: input.Key_Bindings,
+	renderer:      render.Renderer_Config,
+	mod_key:       input.Mod_Key,
+	bindings:      input.Key_Bindings,
+	shell_command: string,
 }
 
-load_config :: proc() -> Config {
+load_config :: proc(config_path := "") -> Config {
+	default_mod_key := input.Mod_Key.Alt
+	when ODIN_OS == .Darwin {
+		default_mod_key = .Super
+	}
+
 	config := Config {
 		renderer = render.renderer_default_config(),
-		mod_key = .Alt,
+		mod_key = default_mod_key,
 		bindings = input.key_bindings_default(),
 	}
-	path := find_config_path()
+	path := find_config_path(config_path)
 	if path == "" {
 		return config
 	}
@@ -36,15 +42,17 @@ load_renderer_config :: proc() -> render.Renderer_Config {
 	return load_config().renderer
 }
 
-find_config_path :: proc() -> string {
-	if os.exists("config.yaml") {
-		return "config.yaml"
+find_config_path :: proc(config_path := "") -> string {
+	if config_path != "" {
+		return config_path
 	}
-	if os.exists("e3.yaml") {
-		return "e3.yaml"
-	}
-	if os.exists("odin-play.yaml") {
-		return "odin-play.yaml"
+
+	// Configuration is user-scoped. Never inspect the process working
+	// directory: launching e3 from a source checkout must behave exactly like
+	// launching it from any other directory.
+	explicit_path := os.get_env("E3_CONFIG", context.temp_allocator)
+	if explicit_path != "" && os.exists(explicit_path) {
+		return explicit_path
 	}
 
 	xdg := os.get_env("XDG_CONFIG_HOME", context.temp_allocator)
@@ -65,6 +73,13 @@ find_config_path :: proc() -> string {
 		path := fmt.aprintf("%s/.config/e3/config.yaml", home, allocator = context.temp_allocator)
 		if os.exists(path) {
 			return path
+		}
+
+		when ODIN_OS == .Darwin {
+			macos_path := fmt.aprintf("%s/Library/Application Support/e3/config.yaml", home, allocator = context.temp_allocator)
+			if os.exists(macos_path) {
+				return macos_path
+			}
 		}
 
 		legacy_path := fmt.aprintf("%s/.config/odin-play/config.yaml", home, allocator = context.temp_allocator)
@@ -145,8 +160,20 @@ apply_config_value :: proc(section: string, key: string, value: string, config: 
 		return
 	}
 
+	if section == "client" || section == "client_colors" {
+		apply_client_value(key, value, &config.renderer)
+		return
+	}
+
 	if section == "input" || section == "keys" {
 		apply_input_value(key, value, config)
+		return
+	}
+
+	if section == "shell" {
+		if key == "command" || key == "path" {
+			config.shell_command = value
+		}
 		return
 	}
 
@@ -170,6 +197,8 @@ apply_config_value :: proc(section: string, key: string, value: string, config: 
 		apply_foreground_value(value, &config.renderer)
 	case "mod", "mod_key":
 		config.mod_key = parse_mod_key(value, config.mod_key)
+	case "shell", "shell_command":
+		config.shell_command = value
 	}
 }
 
@@ -228,6 +257,35 @@ apply_bar_value :: proc(key: string, value: string, config: ^render.Renderer_Con
 	case "binding_mode":
 		if colors, ok := parse_workspace_button_colors(value); ok {
 			config.bar.binding_mode = colors
+		}
+	}
+}
+
+apply_client_value :: proc(key: string, value: string, config: ^render.Renderer_Config) {
+	switch key {
+	case "focused":
+		if colors, ok := parse_client_colors(value); ok {
+			config.client.focused = colors
+		}
+	case "focused_inactive":
+		if colors, ok := parse_client_colors(value); ok {
+			config.client.focused_inactive = colors
+		}
+	case "unfocused":
+		if colors, ok := parse_client_colors(value); ok {
+			config.client.unfocused = colors
+		}
+	case "urgent":
+		if colors, ok := parse_client_colors(value); ok {
+			config.client.urgent = colors
+		}
+	case "focused_tab_title":
+		if colors, ok := parse_client_colors(value); ok {
+			config.client.focused_tab_title = colors
+		}
+	case "background":
+		if r, g, b, ok := parse_hex_color(value); ok {
+			config.client.background = render.RGB_Color{r, g, b}
 		}
 	}
 }
@@ -419,6 +477,36 @@ parse_int :: proc(value: string) -> (int, bool) {
 		result = result * 10 + int(value[index] - '0')
 	}
 	return result, true
+}
+
+parse_client_colors :: proc(value: string) -> (render.Client_Color, bool) {
+	words: [5]string
+	remaining := value
+	for index in 0 ..< len(words) {
+		word, rest, ok := next_word(remaining)
+		if !ok {
+			return render.Client_Color{}, false
+		}
+		words[index] = word
+		remaining = rest
+	}
+
+	border_r, border_g, border_b, border_ok := parse_hex_color(words[0])
+	bg_r, bg_g, bg_b, bg_ok := parse_hex_color(words[1])
+	text_r, text_g, text_b, text_ok := parse_hex_color(words[2])
+	indicator_r, indicator_g, indicator_b, indicator_ok := parse_hex_color(words[3])
+	child_r, child_g, child_b, child_ok := parse_hex_color(words[4])
+	if !(border_ok && bg_ok && text_ok && indicator_ok && child_ok) {
+		return render.Client_Color{}, false
+	}
+
+	return render.Client_Color {
+		border = render.RGB_Color{border_r, border_g, border_b},
+		background = render.RGB_Color{bg_r, bg_g, bg_b},
+		text = render.RGB_Color{text_r, text_g, text_b},
+		indicator = render.RGB_Color{indicator_r, indicator_g, indicator_b},
+		child_border = render.RGB_Color{child_r, child_g, child_b},
+	}, true
 }
 
 parse_workspace_button_colors :: proc(value: string) -> (render.Workspace_Button_Colors, bool) {

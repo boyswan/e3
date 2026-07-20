@@ -1,0 +1,101 @@
+set $mod Mod4
+
+#----------------------------------------------------------------------
+# Look & Feel
+#----------------------------------------------------------------------
+# Font for window titles. Will also be used by the bar unless a different font
+# is used in the bar {} block below.
+font pango:MesloLGL Nerd Font 9
+
+# Window visuals
+default_border pixel 1
+default_floating_border pixel 1
+floating_minimum_size 400 x 300
+floating_maximum_size -1 x -1
+focus_follows_mouse no
+
+#----------------------------------------------------------------------
+# Color Definitions (from Xresources)
+#----------------------------------------------------------------------
+# Syntax: set_from_resource $variable  <resource_name>  <fallback_color>
+set_from_resource $bg      background  #171717
+set_from_resource $fg      foreground  #C5C8C6
+set_from_resource $dark    color0      #383838
+set_from_resource $accent  color4      #51A8B3
+set_from_resource $good    color2      #98c379
+set_from_resource $urgent  color1      #e06c75
+set_from_resource $grey    color8      #A7AAB0
+set_from_resource $nudge   color5      #85678F
+
+#----------------------------------------------------------------------
+# Window visuals
+#----------------------------------------------------------------------
+default_border pixel 1
+default_floating_border pixel 1
+
+# class                 border    backgr    text    indicator child_border
+client.focused          $dark     $bg       $accent  $nudge    $accent
+client.focused_inactive $dark     $bg       $accent  $dark     $grey
+client.unfocused        $dark     $bg       $grey    $dark     $dark
+client.urgent           $dark     $urgent   $dark    $urgent   $urgent
+client.background       $bg
+
+#----------------------------------------------------------------------
+# Startup
+#----------------------------------------------------------------------
+# xss-lock grabs a logind suspend inhibit lock and will use i3lock to lock the
+# screen before suspend. Use loginctl lock-session to lock your screen.
+exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock --nofork
+
+# No background
+# exec --no-startup-id xsetroot -solid $black
+exec_always --no-startup-id xsetroot -solid "#0a0a0a"
+exec_always --no-startup-id xrandr --output Virtual-1 --auto
+exec_always --no-startup-id xset r rate 200 40
+
+# bindsym $mod+Shift+r exec --no-startup-id xrandr --output Virtual-1 --auto
+
+
+# Keyboard layout settings
+exec --no-startup-id setxkbmap -layout gb
+
+# Input methods
+exec --no-startup-id fcitx5 -d
+
+# Start vmware user
+exec --no-startup-id vmware-user-suid-wrapper
+
+# Sync clipboards
+exec_always --no-startup-id autocutsel -selection PRIMARY -fork
+exec_always --no-startup-id autocutsel -selection CLIPBOARD -fork
+
+#----------------------------------------------------------------------
+# Keybindings
+#----------------------------------------------------------------------
+# Use Mouse+$mod to drag floating windows to their wanted position
+floating_modifier $mod
+
+bindsym $mod+o exec rofi -show run
+
+# start a terminal
+# bindsym $mod+Return exec alacritty --gtk-single-instance=true
+# bindsym $mod+Return exec alacritty 
+# bindsym $mod+Return exec --no-startup-id alacritty --working-directory "$(xcwd)"
+bindsym $mod+Return exec --no-startup-id alacritty --working-directory "$(sh ~/.config/i3/i3dir)"
+# bindsym $mod+Return exec --no-startup-id alacritty 
+# bindsym $mod+n exec ghostty --gtk-single-instance=true
+# bindsym $mod+n exec ghostty 
+bindsym $mod+d split h
+bindsym $mod+Shift+d split v
+
+
+# kill focused window
+bindsym $mod+w kill
+
+
+# # mac bindings
+# bindsym --release $mod+a exec --no-startup-id xdotool key --clearmodifiers Ctrl+a
+# bindsym --release $mod+w exec --no-startup-id xdotool key --clearmodifiers Ctrl+w
+# bindsym --release $mod+t exec --no-startup-id xdotool key --clearmodifiers Ctrl+t
+# bindsym --release $mod+Backspace exec --no-startup-id xdotool key --clearmodifiers Ctrl+Backspace
+# bindsym --release $mod+c exec --no-startup-id xdotool key --clearmodifiers

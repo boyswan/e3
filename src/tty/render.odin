@@ -51,7 +51,7 @@ present :: proc(buffer: ^render.Screen_Buffer) {
 			cell := buffer.cells[index]
 
 			if !style_equal(style, cell) {
-				set_style(cell)
+				set_style(buffer, cell)
 				style = cell
 			}
 
@@ -88,7 +88,7 @@ style_equal :: proc(a: render.Cell, b: render.Cell) -> bool {
 		a.bg_b == b.bg_b
 }
 
-set_style :: proc(cell: render.Cell) {
+set_style :: proc(buffer: ^render.Screen_Buffer, cell: render.Cell) {
 	fmt.print("\x1b[0m")
 
 	if cell.bold {
@@ -101,13 +101,17 @@ set_style :: proc(cell: render.Cell) {
 			fmt.printf("\x1b[38;2;%d;%d;%dm", cell.fg_r, cell.fg_g, cell.fg_b)
 		}
 	case .Inactive:
-		fmt.print("\x1b[90m")
+		color := buffer.client.unfocused.child_border
+		fmt.printf("\x1b[38;2;%d;%d;%dm", color.r, color.g, color.b)
 	case .Focused_Inactive:
-		fmt.print("\x1b[37m")
+		color := buffer.client.focused_inactive.child_border
+		fmt.printf("\x1b[38;2;%d;%d;%dm", color.r, color.g, color.b)
 	case .Focused:
-		fmt.print("\x1b[34m")
+		color := buffer.client.focused.child_border
+		fmt.printf("\x1b[38;2;%d;%d;%dm", color.r, color.g, color.b)
 	case .Split_Hint:
-		fmt.print("\x1b[35m")
+		color := buffer.client.focused.indicator
+		fmt.printf("\x1b[38;2;%d;%d;%dm", color.r, color.g, color.b)
 	}
 
 	if cell.bg_set && cell.color == .Default {

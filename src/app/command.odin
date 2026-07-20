@@ -16,6 +16,7 @@ Command_Kind :: enum {
 	Layout_Toggle_Split,
 	Layout_Tabbed,
 	Layout_Stacking,
+	Fullscreen_Toggle,
 	Close_Pane,
 	Dump_Tree,
 }
@@ -87,6 +88,10 @@ command_layout_stacking :: proc() -> Command {
 	return Command{kind = .Layout_Stacking}
 }
 
+command_fullscreen_toggle :: proc() -> Command {
+	return Command{kind = .Fullscreen_Toggle}
+}
+
 command_close_pane :: proc() -> Command {
 	return Command{kind = .Close_Pane}
 }
@@ -127,6 +132,8 @@ execute_command :: proc(app: ^App, command: Command) -> bool {
 		return layout_tabbed(app)
 	case .Layout_Stacking:
 		return layout_stacking(app)
+	case .Fullscreen_Toggle:
+		return toggle_focused_pane_fullscreen(app)
 	case .Close_Pane:
 		return close_focused_pane(app)
 	case .Dump_Tree:

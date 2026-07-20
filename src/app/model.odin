@@ -26,6 +26,7 @@ Terminal_Handle :: struct {
 	title_refresh_tick:      time.Tick,
 	title_initialized:       bool,
 	title_uses_client_value: bool,
+	shell_command:           string,
 
 	cursor_x: int,
 	cursor_y: int,
@@ -51,6 +52,7 @@ Pane :: struct {
 	bounds:       Rect,
 	split_kind:   Node_Kind,
 	split_active: bool,
+	fullscreen:   bool,
 }
 
 Node_Kind :: enum {
@@ -97,4 +99,5 @@ App :: struct {
 	workspaces:             [dynamic]Workspace,
 	active_workspace_index: int,
 	next_pane_id:           int,
+	shell_command:          string,
 }
