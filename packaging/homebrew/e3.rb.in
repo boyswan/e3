@@ -8,6 +8,7 @@ class E3 < Formula
   version "@VERSION@"
   license "MIT"
 
+  depends_on :macos
   depends_on "sdl3"
   depends_on "sdl3_ttf"
 

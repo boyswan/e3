@@ -4,6 +4,13 @@ An experimental Odin terminal multiplexer inspired by i3.
 
 `e3` opens terminal panes, arranges them in an i3-style layout tree, and supports numbered workspaces, split layouts, focus movement, pane movement, resize mode, and configurable keybindings. It runs as a native SDL3 window by default, with an optional terminal/TTY renderer.
 
+## Homebrew
+
+```sh
+brew tap boyswan/e3
+brew install e3
+```
+
 ## Requirements
 
 The easiest way to get the required tools and libraries is with Nix:
