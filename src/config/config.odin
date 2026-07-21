@@ -3,6 +3,7 @@ package config
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import posix "core:sys/posix"
 import input "../input"
 import render "../render"
 
@@ -69,25 +70,52 @@ find_config_path :: proc(config_path := "") -> string {
 	}
 
 	home := os.get_env("HOME", context.temp_allocator)
-	if home != "" {
-		path := fmt.aprintf("%s/.config/e3/config.yaml", home, allocator = context.temp_allocator)
-		if os.exists(path) {
+	if path := find_config_in_home(home); path != "" {
+		return path
+	}
+
+	// GUI launchers do not consistently provide a shell-style HOME
+	// environment. Also try the account database, which is authoritative for
+	// the current macOS/Linux user and works when HOME is absent or incorrect.
+	account_home := account_home_directory()
+	if account_home != home {
+		if path := find_config_in_home(account_home); path != "" {
 			return path
-		}
-
-		when ODIN_OS == .Darwin {
-			macos_path := fmt.aprintf("%s/Library/Application Support/e3/config.yaml", home, allocator = context.temp_allocator)
-			if os.exists(macos_path) {
-				return macos_path
-			}
-		}
-
-		legacy_path := fmt.aprintf("%s/.config/odin-play/config.yaml", home, allocator = context.temp_allocator)
-		if os.exists(legacy_path) {
-			return legacy_path
 		}
 	}
 
+	return ""
+}
+
+account_home_directory :: proc() -> string {
+	account := posix.getpwuid(posix.getuid())
+	if account == nil || account.pw_dir == nil {
+		return ""
+	}
+	return strings.clone(string(account.pw_dir), context.temp_allocator)
+}
+
+find_config_in_home :: proc(home: string) -> string {
+	if home == "" {
+		return ""
+	}
+
+	path := fmt.aprintf("%s/.config/e3/config.yaml", home, allocator = context.temp_allocator)
+	if os.exists(path) {
+		return path
+	}
+
+	when ODIN_OS == .Darwin {
+		macos_path := fmt.aprintf("%s/Library/Application Support/e3/config.yaml", home, allocator = context.temp_allocator)
+		if os.exists(macos_path) {
+			return macos_path
+		}
+	}
+
+	legacy_path := fmt.aprintf("%s/.config/odin-play/config.yaml", home, allocator = context.temp_allocator)
+	if os.exists(legacy_path) {
+		return legacy_path
+	}
 	return ""
 }
 

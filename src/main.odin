@@ -112,7 +112,10 @@ main :: proc() {
 	// Finder/LaunchServices may assign an implementation-defined working
 	// directory. New app panes should consistently begin in the user's home.
 	if launched_from_app_bundle() {
-		if home := posix.getenv("HOME"); home != nil {
+		account := posix.getpwuid(posix.getuid())
+		if account != nil && account.pw_dir != nil {
+			_ = posix.chdir(account.pw_dir)
+		} else if home := posix.getenv("HOME"); home != nil {
 			_ = posix.chdir(home)
 		}
 	}
