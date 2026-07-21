@@ -41,9 +41,7 @@ resize_watch :: proc "c" (userdata: rawptr, event: ^sdl3.Event) -> bool {
 	return true
 }
 
-render_frame :: proc(r: ^renderer.Renderer, state: ^domain.App, config: ^cfg.Config, mode: input.Input_Mode) {
-	domain.poll_all_terminals(state)
-
+render_frame :: proc(r: ^renderer.Renderer, state: ^domain.App, config: ^cfg.Config, mode: input.Input_Mode, settle_layout := false) {
 	new_width, new_height := renderer.width(r), renderer.height(r)
 	if r.kind == .TTY {
 		new_width, new_height = tty.size_or_default(80, 24)
@@ -57,10 +55,26 @@ render_frame :: proc(r: ^renderer.Renderer, state: ^domain.App, config: ^cfg.Con
 		terminal_height_padding = (2 * config.renderer.native_pane_padding_px + renderer.cell_height(r) - 1) / max_int(renderer.cell_height(r), 1)
 	}
 
+	bounds := domain.Rect{x = 0, y = 0, width = renderer.width(r), height = renderer.height(r)}
+	// Resize PTYs before polling them. Geometry-changing commands cause clients
+	// to redraw on SIGWINCH; allowing one SDL frame for that output prevents a
+	// transient cleared terminal state from being presented as pane flicker.
+	render.prepare_app_layout(
+		state,
+		bounds,
+		r.kind == .SDL3,
+		terminal_width_padding,
+		terminal_height_padding,
+	)
+	if settle_layout && r.kind == .SDL3 {
+		native.wait(16)
+	}
+	domain.poll_all_terminals(state)
+
 	render.render_app(
 		&r.surface,
 		state,
-		domain.Rect{x = 0, y = 0, width = renderer.width(r), height = renderer.height(r)},
+		bounds,
 		mode,
 		r.kind == .SDL3,
 		terminal_width_padding,
@@ -82,6 +96,18 @@ main :: proc() {
 	if config_path != "" && !os.exists(config_path) {
 		fmt.eprintln("e3: config file does not exist:", config_path)
 		os.exit(2)
+	}
+	if print_config_requested() {
+		resolved_path := cfg.find_config_path(config_path)
+		config := cfg.load_config(config_path)
+		if resolved_path == "" {
+			resolved_path = "<built-in defaults>"
+		}
+		fmt.println("config.path:", resolved_path)
+		fmt.println("font.family:", config.renderer.font_family)
+		fmt.println("font.path:", config.renderer.font_path)
+		fmt.println("font.size:", config.renderer.font_size)
+		return
 	}
 
 	renderer_kind := renderer_kind_from_args()
@@ -151,8 +177,10 @@ main :: proc() {
 	}
 
 	running := true
+	settle_layout := false
 	for running {
-		render_frame(&r, &state, &config, input_mode)
+		render_frame(&r, &state, &config, input_mode, settle_layout)
+		settle_layout = false
 
 		action := read_next_action(&r, input_mode, config.mod_key, config.bindings)
 		if action.kind == .None {
@@ -165,7 +193,7 @@ main :: proc() {
 		case .Quit:
 			running = false
 		case .Command:
-			domain.execute_command(&state, action.command)
+			settle_layout = domain.execute_command(&state, action.command)
 		case .Pane_Input:
 			domain.write_focused_terminal(&state, action.input_data[:action.input_len])
 		case .Paste_Clipboard:

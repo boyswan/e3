@@ -5,7 +5,7 @@ import "core:os"
 import "core:strings"
 import posix "core:sys/posix"
 
-E3_VERSION :: #config(E3_VERSION, "0.1.7-dev")
+E3_VERSION :: #config(E3_VERSION, "0.1.8-dev")
 
 handle_metadata_args :: proc() -> bool {
 	for arg in os.args {
@@ -24,6 +24,15 @@ handle_metadata_args :: proc() -> bool {
 detach_requested :: proc() -> bool {
 	for arg in os.args {
 		if arg == "--detach" {
+			return true
+		}
+	}
+	return false
+}
+
+print_config_requested :: proc() -> bool {
+	for arg in os.args {
+		if arg == "--print-config" {
 			return true
 		}
 	}
@@ -96,6 +105,7 @@ print_usage :: proc() {
 	fmt.println("      --gui          Force the SDL window renderer")
 	fmt.println("      --detach       Launch an independent SDL window")
 	fmt.println("      --foreground   Keep an SDL process attached for logging/debugging")
+	fmt.println("      --print-config Show the resolved config path and effective font")
 	fmt.println("  -V, --version      Print version and exit")
 	fmt.println("  -h, --help         Print help and exit")
 }

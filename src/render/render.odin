@@ -5,19 +5,43 @@ import "core:unicode/utf8"
 import domain "../app"
 import input "../input"
 
+prepare_app_layout :: proc(state: ^domain.App, bounds: domain.Rect, native_chrome := false, terminal_width_padding := 0, terminal_height_padding := 0) {
+	workspace := domain.active_workspace(state)
+	if workspace == nil {
+		return
+	}
+
+	if pane := domain.fullscreen_pane(workspace.root); pane != nil {
+		pane.bounds = bounds
+		domain.terminal_spawn_shell(&pane.terminal, max_int(bounds.width, 1), max_int(bounds.height, 1))
+		return
+	}
+
+	content_bounds := domain.Rect {
+		x = bounds.x,
+		y = bounds.y,
+		width = bounds.width,
+		height = bounds.height - 1,
+	}
+	domain.layout_workspace(workspace, content_bounds)
+	terminal_inset := 1
+	if native_chrome {
+		terminal_inset = 0
+	}
+	domain.sync_pane_terminals(workspace.root, terminal_inset, terminal_width_padding, terminal_height_padding)
+}
+
 render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Rect, mode := input.Input_Mode.Normal, native_chrome := false, terminal_width_padding := 0, terminal_height_padding := 0) {
 	workspace := domain.active_workspace(state)
 	if workspace == nil {
 		return
 	}
 
+	prepare_app_layout(state, bounds, native_chrome, terminal_width_padding, terminal_height_padding)
 	screen_clear(buffer)
 
 	if pane := domain.fullscreen_pane(workspace.root); pane != nil {
 		// i3 fullscreen suppresses container decorations and the workspace bar.
-		// Give the pane the complete renderer surface, including the bar row.
-		pane.bounds = bounds
-		domain.terminal_spawn_shell(&pane.terminal, max_int(bounds.width, 1), max_int(bounds.height, 1))
 		render_terminal_contents(buffer, pane, true, 0)
 		return
 	}
@@ -28,13 +52,6 @@ render_app :: proc(buffer: ^Screen_Buffer, state: ^domain.App, bounds: domain.Re
 		width = bounds.width,
 		height = bounds.height - 1,
 	}
-
-	domain.layout_workspace(workspace, content_bounds)
-	terminal_inset := 1
-	if native_chrome {
-		terminal_inset = 0
-	}
-	domain.sync_pane_terminals(workspace.root, terminal_inset, terminal_width_padding, terminal_height_padding)
 	if !native_chrome {
 		render_split_separators(buffer, workspace.root)
 		screen_draw_box(buffer, content_bounds)

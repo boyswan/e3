@@ -109,6 +109,12 @@ A configuration file is optional; e3 has portable built-in defaults. Configurati
 3. `~/.config/e3/config.yaml`
 4. `~/Library/Application Support/e3/config.yaml` (macOS)
 
+Inspect the automatically resolved path and effective font settings with:
+
+```sh
+/Applications/e3.app/Contents/MacOS/e3 --print-config
+```
+
 Pass an explicit file with `--config`, `--config=...`, or `-c`; this takes precedence over every environment/user path:
 
 ```sh
