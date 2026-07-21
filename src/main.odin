@@ -135,6 +135,9 @@ main :: proc() {
 	}
 
 	config := cfg.load_config(config_path)
+	if launched_from_app_bundle() {
+		cfg.write_app_launch_diagnostic(config_path, &config, E3_VERSION)
+	}
 	// Finder/LaunchServices may assign an implementation-defined working
 	// directory. New app panes should consistently begin in the user's home.
 	if launched_from_app_bundle() {

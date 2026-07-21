@@ -43,6 +43,47 @@ load_renderer_config :: proc() -> render.Renderer_Config {
 	return load_config().renderer
 }
 
+write_app_launch_diagnostic :: proc(requested_path: string, config: ^Config, version: string) {
+	account_home := account_home_directory()
+	if account_home == "" {
+		account_home = os.get_env("HOME", context.temp_allocator)
+	}
+	if account_home == "" {
+		return
+	}
+
+	logs_dir := fmt.aprintf("%s/Library/Logs", account_home, allocator = context.temp_allocator)
+	_ = os.make_directory_all(logs_dir)
+	log_path := fmt.aprintf("%s/e3-launch.log", logs_dir, allocator = context.temp_allocator)
+	resolved_path := find_config_path(requested_path)
+	if resolved_path == "" {
+		resolved_path = "<built-in defaults>"
+	}
+	working_directory, _ := os.get_working_directory(context.temp_allocator)
+	executable := ""
+	if len(os.args) > 0 {
+		executable = os.args[0]
+	}
+	report := fmt.aprintf(
+		"version=%s\npid=%d\nexecutable=%s\ncwd=%s\nHOME=%s\nXDG_CONFIG_HOME=%s\nE3_CONFIG=%s\naccount_home=%s\nconfig.requested=%s\nconfig.resolved=%s\nfont.family=%s\nfont.path=%s\nfont.size=%v\n",
+		version,
+		posix.getpid(),
+		executable,
+		working_directory,
+		os.get_env("HOME", context.temp_allocator),
+		os.get_env("XDG_CONFIG_HOME", context.temp_allocator),
+		os.get_env("E3_CONFIG", context.temp_allocator),
+		account_home,
+		requested_path,
+		resolved_path,
+		config.renderer.font_family,
+		config.renderer.font_path,
+		config.renderer.font_size,
+		allocator = context.temp_allocator,
+	)
+	_ = os.write_entire_file(log_path, report)
+}
+
 find_config_path :: proc(config_path := "") -> string {
 	if config_path != "" {
 		return config_path

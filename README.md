@@ -115,6 +115,8 @@ Inspect the automatically resolved path and effective font settings with:
 /Applications/e3.app/Contents/MacOS/e3 --print-config
 ```
 
+Normal `.app` launches also overwrite `~/Library/Logs/e3-launch.log` with the actual LaunchServices environment, resolved config path, and effective font settings.
+
 Pass an explicit file with `--config`, `--config=...`, or `-c`; this takes precedence over every environment/user path:
 
 ```sh
