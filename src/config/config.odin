@@ -62,11 +62,6 @@ find_config_path :: proc(config_path := "") -> string {
 		if os.exists(path) {
 			return path
 		}
-
-		legacy_path := fmt.aprintf("%s/odin-play/config.yaml", xdg, allocator = context.temp_allocator)
-		if os.exists(legacy_path) {
-			return legacy_path
-		}
 	}
 
 	home := os.get_env("HOME", context.temp_allocator)
@@ -110,11 +105,6 @@ find_config_in_home :: proc(home: string) -> string {
 		if os.exists(macos_path) {
 			return macos_path
 		}
-	}
-
-	legacy_path := fmt.aprintf("%s/.config/odin-play/config.yaml", home, allocator = context.temp_allocator)
-	if os.exists(legacy_path) {
-		return legacy_path
 	}
 	return ""
 }
