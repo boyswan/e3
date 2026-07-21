@@ -56,7 +56,7 @@ make_state :: proc() -> State {
 	}
 }
 
-begin :: proc(state: ^State, config: render.Renderer_Config) -> bool {
+begin :: proc(state: ^State, config: ^render.Renderer_Config) -> bool {
 	if state.renderer != nil {
 		return true
 	}
@@ -90,7 +90,7 @@ begin :: proc(state: ^State, config: render.Renderer_Config) -> bool {
 	return true
 }
 
-update_render_scale :: proc(state: ^State, config: render.Renderer_Config) {
+update_render_scale :: proc(state: ^State, config: ^render.Renderer_Config) {
 	if state.renderer == nil || state.window == nil {
 		return
 	}
@@ -197,7 +197,7 @@ should_quit :: proc() -> bool {
 	return false
 }
 
-present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: render.Renderer_Config, app: ^domain.App = nil, mode := input.Input_Mode.Normal) {
+present :: proc(state: ^State, surface: ^render.Screen_Buffer, config: ^render.Renderer_Config, app: ^domain.App = nil, mode := input.Input_Mode.Normal) {
 	if state.renderer == nil {
 		return
 	}
@@ -302,7 +302,7 @@ apply_selection_style :: proc(state: ^State, surface: ^render.Screen_Buffer, cel
 	cell.bg_b = bg.b
 }
 
-native_cell_offset :: proc(state: ^State, config: render.Renderer_Config, app: ^domain.App, x: int, y: int) -> (int, int) {
+native_cell_offset :: proc(state: ^State, config: ^render.Renderer_Config, app: ^domain.App, x: int, y: int) -> (int, int) {
 	if app != nil {
 		if workspace := domain.active_workspace(app); workspace != nil && domain.fullscreen_pane(workspace.root) != nil {
 			return 0, 0
@@ -378,7 +378,7 @@ draw_cell_foreground :: proc(state: ^State, surface: ^render.Screen_Buffer, x: i
 	_ = sdl3.SetRenderScale(state.renderer, 1, 1)
 }
 
-init_font :: proc(state: ^State, config: render.Renderer_Config) {
+init_font :: proc(state: ^State, config: ^render.Renderer_Config) {
 	if !ttf.Init() {
 		fmt.eprintln("e3: TTF_Init failed:", sdl3.GetError())
 		return
@@ -430,7 +430,7 @@ open_font_path :: proc(state: ^State, font_path: string, font_size: f32) -> bool
 	return true
 }
 
-resolve_font_path :: proc(config: render.Renderer_Config) -> string {
+resolve_font_path :: proc(config: ^render.Renderer_Config) -> string {
 	if config.font_path != "" {
 		return config.font_path
 	}

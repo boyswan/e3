@@ -135,9 +135,6 @@ main :: proc() {
 	}
 
 	config := cfg.load_config(config_path)
-	if launched_from_app_bundle() {
-		cfg.write_app_launch_diagnostic(config_path, &config, E3_VERSION)
-	}
 	// Finder/LaunchServices may assign an implementation-defined working
 	// directory. New app panes should consistently begin in the user's home.
 	if launched_from_app_bundle() {
@@ -156,11 +153,21 @@ main :: proc() {
 	if renderer_kind == .TTY {
 		width, height = tty.size_or_default(80, 24)
 	}
-	r := renderer.make(renderer_kind, width, height, config.renderer)
+	r := renderer.make(renderer_kind, width, height, &config.renderer)
 	defer renderer.destroy(&r)
 
 	renderer.begin(&r)
 	defer renderer.end(&r)
+	if launched_from_app_bundle() {
+		cfg.write_app_launch_diagnostic(
+			config_path,
+			&config,
+			E3_VERSION,
+			renderer.cell_width(&r),
+			renderer.cell_height(&r),
+			renderer.pixel_scale(&r),
+		)
+	}
 
 	mode: tty.Mode
 	using_tty_mode := false

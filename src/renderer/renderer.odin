@@ -19,7 +19,7 @@ Renderer :: struct {
 	sdl: native.State,
 }
 
-make :: proc(kind: Kind, width: int, height: int, config: render.Renderer_Config) -> Renderer {
+make :: proc(kind: Kind, width: int, height: int, config: ^render.Renderer_Config) -> Renderer {
 	sdl_state: native.State
 	if kind == .SDL3 {
 		sdl_state = native.make_state()
@@ -27,7 +27,7 @@ make :: proc(kind: Kind, width: int, height: int, config: render.Renderer_Config
 
 	renderer := Renderer {
 		kind = kind,
-		config = config,
+		config = config^,
 		surface = render.make_screen_buffer(width, height),
 		sdl = sdl_state,
 	}
@@ -49,7 +49,7 @@ begin :: proc(renderer: ^Renderer) {
 	case .TTY:
 		tty.enter_app_screen()
 	case .SDL3:
-		if native.begin(&renderer.sdl, renderer.config) {
+		if native.begin(&renderer.sdl, &renderer.config) {
 			width, height := native.surface_size(&renderer.sdl, renderer.surface.width, renderer.surface.height)
 			resize(renderer, width, height)
 		}
@@ -96,7 +96,7 @@ present :: proc(renderer: ^Renderer, state: ^domain.App = nil, mode := input.Inp
 	case .TTY:
 		tty.present(&renderer.surface)
 	case .SDL3:
-		native.present(&renderer.sdl, &renderer.surface, renderer.config, state, mode)
+		native.present(&renderer.sdl, &renderer.surface, &renderer.config, state, mode)
 	}
 }
 
@@ -126,6 +126,13 @@ cell_width :: proc(renderer: ^Renderer) -> int {
 cell_height :: proc(renderer: ^Renderer) -> int {
 	if renderer.kind == .SDL3 {
 		return renderer.sdl.cell_height
+	}
+	return 1
+}
+
+pixel_scale :: proc(renderer: ^Renderer) -> f32 {
+	if renderer.kind == .SDL3 {
+		return renderer.sdl.pixel_scale
 	}
 	return 1
 }

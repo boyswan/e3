@@ -43,7 +43,7 @@ load_renderer_config :: proc() -> render.Renderer_Config {
 	return load_config().renderer
 }
 
-write_app_launch_diagnostic :: proc(requested_path: string, config: ^Config, version: string) {
+write_app_launch_diagnostic :: proc(requested_path: string, config: ^Config, version: string, cell_width := 0, cell_height := 0, pixel_scale: f32 = 0) {
 	account_home := account_home_directory()
 	if account_home == "" {
 		account_home = os.get_env("HOME", context.temp_allocator)
@@ -65,7 +65,7 @@ write_app_launch_diagnostic :: proc(requested_path: string, config: ^Config, ver
 		executable = os.args[0]
 	}
 	report := fmt.aprintf(
-		"version=%s\npid=%d\nexecutable=%s\ncwd=%s\nHOME=%s\nXDG_CONFIG_HOME=%s\nE3_CONFIG=%s\naccount_home=%s\nconfig.requested=%s\nconfig.resolved=%s\nfont.family=%s\nfont.path=%s\nfont.size=%v\n",
+		"version=%s\npid=%d\nexecutable=%s\ncwd=%s\nHOME=%s\nXDG_CONFIG_HOME=%s\nE3_CONFIG=%s\naccount_home=%s\nconfig.requested=%s\nconfig.resolved=%s\nfont.family=%s\nfont.path=%s\nfont.size=%v\nrenderer.cell_width=%d\nrenderer.cell_height=%d\nrenderer.pixel_scale=%v\n",
 		version,
 		posix.getpid(),
 		executable,
@@ -79,6 +79,9 @@ write_app_launch_diagnostic :: proc(requested_path: string, config: ^Config, ver
 		config.renderer.font_family,
 		config.renderer.font_path,
 		config.renderer.font_size,
+		cell_width,
+		cell_height,
+		pixel_scale,
 		allocator = context.temp_allocator,
 	)
 	_ = os.write_entire_file(log_path, report)
