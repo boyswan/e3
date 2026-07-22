@@ -489,6 +489,8 @@ when ODIN_OS == .Darwin {
 	}
 
 	foreign coretext {
+		kCTFontURLAttribute: CFStringRef
+
 		CTFontCreateWithName :: proc(name: CFStringRef, size: f64, matrix_ptr: rawptr) -> CTFontRef ---
 		CTFontCreateUIFontForLanguage :: proc(ui_type: c.int, size: f64, language: CFStringRef) -> CTFontRef ---
 		CTFontCopyAttribute :: proc(font: CTFontRef, attribute: CFStringRef) -> CFTypeRef ---
@@ -514,13 +516,7 @@ when ODIN_OS == .Darwin {
 		}
 		defer CFRelease(font)
 
-		url_attribute := CFStringCreateWithCString(nil, "NSFontURLAttribute", kCFStringEncodingUTF8)
-		if url_attribute == nil {
-			return ""
-		}
-		defer CFRelease(url_attribute)
-
-		url := CFURLRef(CTFontCopyAttribute(font, url_attribute))
+		url := CFURLRef(CTFontCopyAttribute(font, kCTFontURLAttribute))
 		if url == nil {
 			return ""
 		}
